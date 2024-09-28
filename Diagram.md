@@ -1,3 +1,5 @@
+## Mermaid Flowchart
+
 ```mermaid
 flowchart TD
     A[Start] --> B[Sleeping]
@@ -15,4 +17,6 @@ C - You wake up from sleeping
 D - Are you still tired? If yes then go to E, otherwise go to F  
 E - Since you are still tired, go back to sleep in your bed. This takes you back to B  
 F - Since you are no longer tired, get out of bed  
-G - End of the flowchart  
+G - End of the flowchart
+
+The flowchart for this process is fairly straightforward. There is only one decision to be made in the flowchart, that being if you are still tired or not. Since sleep is something you can do to become less tired, this flowchart will continue to flow until the end when you finally have enough sleep to get out of bed.
