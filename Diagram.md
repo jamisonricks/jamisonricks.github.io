@@ -1,3 +1,4 @@
+```mermaid
 flowchart TD
     A[Start] --> B[Sleeping]
     B -->C[Wake up]
@@ -6,6 +7,7 @@ flowchart TD
     E --> B
     D -->|No| F[Get out of bed]
     F --> G[End]
+```
 
 A - Start of the flowchart
 B - You are sleeping currently
