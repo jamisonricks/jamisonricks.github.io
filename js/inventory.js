@@ -19,7 +19,4 @@ export class Inventory {
     if (index > -1) this.items.splice(index, 1);
   }
 
-  getItems() {
-    return this.items;
-  }
 }

@@ -3,7 +3,7 @@ import { Player } from './player.js';
 const player = new Player();
 
 // Hides and unhides the inventory
-function toggleInventory() {
+export function toggleInventory() {
   const modal = document.getElementById("inventoryModal");
   modal.classList.toggle("hidden");
   displayInventoryItems();

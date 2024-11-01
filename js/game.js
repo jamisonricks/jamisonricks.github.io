@@ -1,6 +1,7 @@
 import { asciiArt } from './asciiArt.js';
+import { toggleInventory } from './inventoryModal.js';
 
-// Initial game setup
+// Initial gameState object setup
 let gameState = {
   eventText: "Welcome to the game! Make a choice.",
   asciiArtKey: "startScene",
@@ -12,6 +13,7 @@ let gameState = {
 
 // Function to render the game state
 function renderGame() {
+  // change ascii box and event text
   document.getElementById("asciiBox").textContent = asciiArt[gameState.asciiArtKey];
   document.getElementById("eventText").textContent = gameState.eventText;
 
@@ -26,15 +28,19 @@ function renderGame() {
   });
 }
 
-// Example events
 function explore() {
   gameState.eventText = "You venture deeper into the forest.";
   gameState.asciiArtKey = "forestScene";
   gameState.choices = [
     { label: "Fight", action: fight },
+    { label: "Open Inventory", action: openInventory},
     { label: "Flee", action: flee }
   ];
   renderGame();
+}
+
+function openInventory() {
+  toggleInventory();
 }
 
 function rest() {
@@ -69,5 +75,5 @@ function flee() {
   renderGame();
 }
 
-// Initial render
+// Game start function call
 renderGame();
