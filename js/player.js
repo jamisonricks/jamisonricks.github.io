@@ -1,3 +1,5 @@
+import { Inventory } from "./inventory.js";
+
 export class Player {
   constructor(name = false) {
     this.name = name;      // Player's name
@@ -7,5 +9,9 @@ export class Player {
     this.expNext = 100;    // Experience needed to level up         
     this.atk  = 10;        // Attack power
     this.def  = 5;         // Defense power
+
+    // Inventory Setup
+    this.inventory = new Inventory();
+    this.inventory.initializePlayer();
   }
 }

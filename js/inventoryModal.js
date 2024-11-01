@@ -1,8 +1,6 @@
-import { Inventory } from './inventory.js';
 import { Player } from './player.js';
 
 const player = new Player();
-const inventory = new Inventory(player);
 
 // Hides and unhides the inventory
 function toggleInventory() {
@@ -16,11 +14,11 @@ function displayInventoryItems() {
   const itemList = document.getElementById("inventoryList");
   itemList.innerHTML = ""; 
 
-  inventory.getItems().forEach(item => {
+  for (let item in  player.inventory.items) {
     const listItem = document.createElement("li");
-    listItem.textContent = item;
+    listItem.textContent = `${item}: ${player.inventory.items[item]}`;
     itemList.appendChild(listItem);
-  });
+  };
 }
 
 // Add event listeners for button click and I press

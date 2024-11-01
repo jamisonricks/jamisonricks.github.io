@@ -52,6 +52,8 @@ function fight() {
   gameState.asciiArtKey = "battleScene";
   gameState.choices = [
     { label: "Attack", action: attack },
+    { label: "Skill", action: skill },
+    { label: "Item", action: item },
     { label: "Run", action: flee }
   ];
   renderGame();

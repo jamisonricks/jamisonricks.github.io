@@ -1,7 +1,13 @@
 export class Inventory {
-  constructor(owner) {
+  constructor() {
     this.items = [];
-    this.owner = owner
+  }
+
+  initializePlayer() {
+    this.items = {
+      gold: 10,
+      potions: 3,
+    }
   }
 
   addItem(item) {
