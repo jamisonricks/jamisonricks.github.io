@@ -1,6 +1,7 @@
 export class Inventory {
-  constructor() {
+  constructor(owner) {
     this.items = [];
+    this.owner = owner
   }
 
   addItem(item) {

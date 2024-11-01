@@ -8,7 +8,22 @@
 </head>
 <body>
 	<a style="display: block;" href="jamisonricks.github.io/index_2.html">Click Here for original index page.</a>
-  <canvas id="gameCanvas"></canvas>
+  <!-- Game Container box -->
+  <div id="gameContainer" class="ascii-box">
+    <pre id="asciiBox">
+    +--------------------+
+    |                    |
+    |                    |
+    |                    |
+    +--------------------+
+    </pre>
+    <div id="textLog" class="text-log">
+      <p id="eventText">Welcome to the game!</p>
+    </div>
+    <div id="decisionButtons" class="buttons">
+      <!-- Buttons will be dynamically generated here -->
+    </div>
+  </div>
 
   <!-- Inventory Modal -->
   <div id="inventoryModal" class="inventory-modal hidden">
@@ -20,6 +35,6 @@
   </div>
 
   <script type="module" src="js/inventoryModal.js"></script>
-  <script src="js/game.js"></script>
+  <script type="module" src="js/game.js"></script>
 </body>
 </html>

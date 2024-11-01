@@ -1,6 +1,8 @@
 import { Inventory } from './inventory.js';
+import { Player } from './player.js';
 
-const inventory = new Inventory();
+const player = new Player();
+const inventory = new Inventory(player);
 
 // Hides and unhides the inventory
 function toggleInventory() {

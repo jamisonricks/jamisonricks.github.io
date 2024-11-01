@@ -1,5 +1,5 @@
 export class Player {
-  constructor(name) {
+  constructor(name = false) {
     this.name = name;      // Player's name
     this.hp   = 100;       // Health points
     this.lvl  = 1;         // Current Level

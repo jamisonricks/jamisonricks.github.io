@@ -1,88 +1,71 @@
-// Set up the canvas
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-canvas.width = 800;
-canvas.height = 600;
+import { asciiArt } from './asciiArt.js';
 
-// Game Variables
-const tileSize = 32;
-const tileMap = [
-  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 1, 1, 0, 0, 0, 1],
-  [1, 0, 0, 0, 1, 1, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-];
-
-// Player Object
-const player = {
-  x: tileSize,        // Starting position (in pixels)
-  y: tileSize,
-  health: 100,
-  speed: 3,
-  width: tileSize - 4,  // Small gap to fit within tiles
-  height: tileSize - 4,
-  color: 'blue',
-  
-  draw() {
-    ctx.fillStyle = this.color;
-    ctx.fillRect(this.x, this.y, this.width, this.height);
-  },
-
-  move(dx, dy) {
-    // Calculate new position
-    const newX = this.x + dx * this.speed;
-    const newY = this.y + dy * this.speed;
-    const tileX = Math.floor(newX / tileSize);
-    const tileY = Math.floor(newY / tileSize);
-
-    // Check for collision with walls (tile type 1)
-    if (tileMap[tileY] && tileMap[tileY][tileX] === 0) {
-      this.x = newX;
-      this.y = newY;
-    }
-  }
+// Initial game setup
+let gameState = {
+  eventText: "Welcome to the game! Make a choice.",
+  asciiArtKey: "startScene",
+  choices: [
+    { label: "Explore", action: explore },
+    { label: "Rest", action: rest }
+  ]
 };
 
-// Input Handling
-const keys = {};
-window.addEventListener('keydown', (e) => { keys[e.key] = true; });
-window.addEventListener('keyup', (e) => { keys[e.key] = false; });
+// Function to render the game state
+function renderGame() {
+  document.getElementById("asciiBox").textContent = asciiArt[gameState.asciiArtKey];
+  document.getElementById("eventText").textContent = gameState.eventText;
 
-// Game Loop
-function gameLoop() {
-  update();
-  render();
-  requestAnimationFrame(gameLoop);
+  // Update buttons
+  const buttonsContainer = document.getElementById("decisionButtons");
+  buttonsContainer.innerHTML = ""; // Clear existing buttons
+  gameState.choices.forEach(choice => {
+    const button = document.createElement("button");
+    button.textContent = choice.label;
+    button.addEventListener("click", choice.action);
+    buttonsContainer.appendChild(button);
+  });
 }
 
-// Update Game State
-function update() {
-  if (keys['ArrowUp']) player.move(0, -1);
-  if (keys['ArrowDown']) player.move(0, 1);
-  if (keys['ArrowLeft']) player.move(-1, 0);
-  if (keys['ArrowRight']) player.move(1, 0);
+// Example events
+function explore() {
+  gameState.eventText = "You venture deeper into the forest.";
+  gameState.asciiArtKey = "forestScene";
+  gameState.choices = [
+    { label: "Fight", action: fight },
+    { label: "Flee", action: flee }
+  ];
+  renderGame();
 }
 
-// Render the Game
-function render() {
-  // Clear the canvas
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // Render the map
-  for (let row = 0; row < tileMap.length; row++) {
-    for (let col = 0; col < tileMap[row].length; col++) {
-      if (tileMap[row][col] === 1) {
-        ctx.fillStyle = 'gray';
-        ctx.fillRect(col * tileSize, row * tileSize, tileSize, tileSize);
-      }
-    }
-  }
-
-  // Render the player
-  player.draw();
+function rest() {
+  gameState.eventText = "You take a moment to rest. Health restored!";
+  gameState.asciiArtKey = "restScene";
+  gameState.choices = [
+    { label: "Continue", action: explore },
+    { label: "Sleep", action: sleep }
+  ];
+  renderGame();
 }
 
-// Start the game loop
-gameLoop();
+function fight() {
+  gameState.eventText = "A wild creature appears!";
+  gameState.asciiArtKey = "battleScene";
+  gameState.choices = [
+    { label: "Attack", action: attack },
+    { label: "Run", action: flee }
+  ];
+  renderGame();
+}
+
+function flee() {
+  gameState.eventText = "You escaped safely.";
+  gameState.asciiArtKey = "safeZone";
+  gameState.choices = [
+    { label: "Rest", action: rest },
+    { label: "Explore", action: explore }
+  ];
+  renderGame();
+}
+
+// Initial render
+renderGame();
