@@ -84,6 +84,7 @@ function post_battle(exp_gained) {
 
 function end_screen() {
 	text_box.innerHTML = 'Congratulations on beating the game. This game is very unfinished but I would still love to hear your thoughts on it! <br>To replay the game, simply refresh your browser.'
+	main_btn.hidden = true;
 }
 
 
