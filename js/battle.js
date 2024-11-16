@@ -25,7 +25,7 @@ export class Battle {
   battle_setup() {
     // Set menu elements to be good for battling
     this.menu.text_box.innerHTML = 'You have engaged the ' + this.enemy.name + '.';
-    this.menu.main_btn.hidden = true;
+    this.menu.toggle_all_btns('hide');
 
     this.battle_menu();
   }
@@ -66,7 +66,7 @@ export class Battle {
     // check to see if enemy died
     if (this.enemy.hp <= 0) {
       this.menu.text_box.innerHTML = 'You have defeated the ' + this.enemy.name + '!';
-      this.battle_won();
+      this.post_battle();
     } else {
       this.enemy_turn();
     }
@@ -116,13 +116,17 @@ export class Battle {
     this.menu.text_box.innerHTML = 'You were able to flee the battle successfully!';
   }
 
-  battle_won() {
+  calculate_exp() {
+    // @todo may add more advanced exp calculating and level up checking later
+    this.player.exp = this.player.exp + this.enemy.exp_given;
+  }
+
+  post_battle() {
     this.#clear_battle_menu();
+    this.calculate_exp();
+
 
   }
 
-  battle_lost() {
-    this.#clear_battle_menu();
 
-  }
 }
