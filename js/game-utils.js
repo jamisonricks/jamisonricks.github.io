@@ -28,6 +28,18 @@
     return '';
   };
 
+  window.RPG.formatAttackResult = function (attacker, target, result) {
+    if (!result.hit) {
+      return `${attacker.name} attacks ${target.name}, but misses.`;
+    }
+    if (result.prevented) {
+      return `${target.name}'s passive blocks the hit completely.`;
+    }
+    const criticalText = result.critical ? ' Critical hit!' : '';
+    return `${attacker.name} attacks ${target.name} for ${result.damage} damage`
+      + window.RPG.formatEffectiveness(result.effectiveness) + `.${criticalText}`;
+  };
+
   window.RPG.describeEnemy = function (target) {
     const weaknessNames = target.weaknesses.map(function (damageType) {
       return gameData.damageTypes[damageType].name;

@@ -17,7 +17,8 @@ document.addEventListener('DOMContentLoaded', function () {
     levelUp: document.getElementById('level-up'),
     shop: document.getElementById('shop'),
     preparation: document.getElementById('preparation'),
-    preparationPanel: document.getElementById('preparation-panel')
+    preparationPanel: document.getElementById('preparation-panel'),
+    share: document.getElementById('share-button')
   };
 
   // Core game state variables.
@@ -26,6 +27,7 @@ document.addEventListener('DOMContentLoaded', function () {
   let items;
   let defeatedEnemies = 0;
   let gameOver = false;
+  let inCombat = false;
 
   // --------------------------------------------------
   // EVENT LISTENERS
@@ -37,13 +39,17 @@ document.addEventListener('DOMContentLoaded', function () {
   // Player attack button.
   document.getElementById('attack-button').addEventListener('click', function () {
     takePlayerAction(function () {
-      const result = player.attackWithResult(enemy, 0, player.damageBuff);
+      const result = player.attackWithResult(enemy, 0, player.damageBuff, 'normal',
+        player.consumeGuaranteedAttack());
 
       // Remove any temporary damage bonus after attacking.
       player.damageBuff = 0;
 
-      return `${player.name} attacks ${enemy.name} for ${result.damage} damage`
-        + RPG.formatEffectiveness(result.effectiveness) + '.';
+      if (player.passiveType === 'Mage') player.recoverMp(2);
+      const message = RPG.formatAttackResult(player, enemy, result);
+      return player.passiveType === 'Mage'
+        ? `${message} Mage passive restores 2 MP.`
+        : message;
     });
   });
 
@@ -77,9 +83,16 @@ document.addEventListener('DOMContentLoaded', function () {
   document.getElementById('stats-button').addEventListener('click', function () {
     renderPreparationPanel('stats');
   });
+  document.getElementById('skills-button').addEventListener('click', function () {
+    renderPreparationPanel('skills');
+  });
+  document.getElementById('shop-button').addEventListener('click', function () {
+    showShop(['Welcome back to the shop.']);
+  });
 
   // Begin the next enemy encounter.
   document.getElementById('next-combat-button').addEventListener('click', startNextCombat);
+  elements.share.addEventListener('click', shareResults);
 
 
   // --------------------------------------------------
@@ -90,6 +103,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // Display the available player classes.
   function showClassSelection() {
     elements.start.hidden = true;
+    elements.share.hidden = true;
     elements.classSelection.hidden = false;
 
     // Clear any previously generated class buttons.
@@ -105,7 +119,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
       // Display the class description underneath its name.
       const description = document.createElement('small');
-      description.textContent = classData.description;
+      const startingItem = gameData.items.find(function (item) {
+        return item.id === classData.startingItems[0];
+      });
+      description.textContent = `${classData.description} Passive: ${classData.passive} `
+        + `Starting item: ${startingItem.name}.`;
       button.appendChild(description);
 
       // Start the game using the selected class.
@@ -131,10 +149,14 @@ document.addEventListener('DOMContentLoaded', function () {
     items = gameData.items.map(function (definition) {
       return new RPG.Item(definition);
     });
+    classData.startingItems.forEach(function (itemId) {
+      player.addItem(itemId);
+    });
 
     // Reset the game progress.
     defeatedEnemies = 0;
     gameOver = false;
+    elements.share.hidden = true;
 
     // Show the combat interface and hide class selection.
     elements.classSelection.hidden = true;
@@ -142,6 +164,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Create the first enemy without rendering an intermediate message.
     createEnemy();
+    inCombat = true;
 
     // Display the opening game messages once.
     renderOutput([
@@ -188,6 +211,12 @@ document.addEventListener('DOMContentLoaded', function () {
         + level * encounter.attackChancePerDefeat
         + Math.random() * encounter.attackChanceRandomness
     );
+    const dexterity = encounter.baseDexterity
+      + RPG.getRandomInt(encounter.dexterityRandomness);
+    const agility = encounter.baseAgility
+      + RPG.getRandomInt(encounter.agilityRandomness);
+    const critChance = encounter.baseCritChance
+      + Math.random() * encounter.critChanceRandomness;
 
     // Get all available damage types.
     const damageTypes = Object.keys(gameData.damageTypes);
@@ -213,7 +242,10 @@ document.addEventListener('DOMContentLoaded', function () {
       defense,
       attackChance,
       [weakness],
-      resistance
+      resistance,
+      dexterity,
+      agility,
+      critChance
     );
   }
 
@@ -223,6 +255,7 @@ document.addEventListener('DOMContentLoaded', function () {
     elements.combat.hidden = false;
 
     createEnemy();
+    inCombat = true;
 
     renderOutput([
       `A ${enemy.name} appears!`,
@@ -294,11 +327,12 @@ document.addEventListener('DOMContentLoaded', function () {
     player.skills.forEach(function (skill) {
       const button = document.createElement('button');
       button.type = 'button';
+      button.classList.add(`skill-rarity-${skill.rarity}`);
 
       // Disable skills the player cannot currently afford or use.
       button.disabled = !player.canUseSkill(skill);
 
-      button.textContent = `${skill.name} (${skill.mpCost} MP)`;
+      button.textContent = `${skill.name} (${player.getSkillCost(skill)} MP)`;
 
       // Display a description of what the skill does.
       const description = document.createElement('small');
@@ -402,6 +436,9 @@ document.addEventListener('DOMContentLoaded', function () {
         `${player.name} is incapable and loses this turn.`
       );
     } else {
+      if (player.preparePassive()) {
+        messages.push('Deadeye is ready: the next attack is guaranteed to hit and critically hit.');
+      }
       // Execute the selected player action.
       messages.push(action());
     }
@@ -464,6 +501,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Hide the combat interface while the player progresses.
     elements.combat.hidden = true;
+    inCombat = false;
 
     // Reset pending level-ups before calculating new ones.
     player.pendingLevelUps = 0;
@@ -474,12 +512,11 @@ document.addEventListener('DOMContentLoaded', function () {
       player.pendingLevelUps += 1;
     }
 
-    // Show the level-up screen if necessary.
-    // Otherwise, move directly to the shop.
+    // Show the level-up screen if necessary, then return to preparation.
     if (player.pendingLevelUps > 0) {
       showLevelUp(messages);
     } else {
-      showShop(messages);
+      showPreparation(messages);
     }
   }
 
@@ -510,20 +547,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Find skills that have not already been learned.
     // Shuffle the available skills and offer up to four choices.
-    const available = RPG.shuffle(
-      gameData.levelUpSkills.filter(function (definition) {
-        return !learned.includes(definition.name);
-      })
-    ).slice(0, 4);
+    const available = chooseLevelUpSkills(gameData.levelUpSkills.filter(function (definition) {
+      return !learned.includes(definition.name);
+    }), 4);
 
     available.forEach(function (definition) {
       const button = document.createElement('button');
       button.type = 'button';
+      button.classList.add(`skill-rarity-${definition.rarity}`);
       button.textContent = definition.name;
 
       // Display the skill description and MP cost.
       const description = document.createElement('small');
-      description.textContent = `${definition.description} (${definition.mpCost} MP)`;
+      description.textContent = `${definition.description} (${definition.mpCost} MP) `
+        + `[${definition.rarity}]`;
       button.appendChild(description);
 
       // Add the selected skill to the player's skill list.
@@ -535,9 +572,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (player.pendingLevelUps > 0) {
           showLevelUp([`You learned ${definition.name}.`]);
         } else {
-          // Otherwise, finish levelling and proceed to the shop.
+          // Otherwise, finish levelling and return to preparation.
           elements.levelUp.hidden = true;
-          showShop([`You learned ${definition.name}.`]);
+          showPreparation([`You learned ${definition.name}.`]);
         }
       });
 
@@ -549,7 +586,7 @@ document.addEventListener('DOMContentLoaded', function () {
       player.pendingLevelUps = 0;
       elements.levelUp.hidden = true;
 
-      showShop(['All available skills have been learned.']);
+      showPreparation(['All available skills have been learned.']);
     }
   }
 
@@ -562,41 +599,34 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function showShop(messages) {
     elements.shop.hidden = false;
+    elements.preparation.hidden = true;
+    inCombat = false;
     elements.shop.replaceChildren();
 
-    messages.push('', 'Visit the shop before the next encounter.');
+    messages.push('', 'Spend gold in the shop, then return to preparation when ready.');
 
     renderOutput(messages);
 
-    // Generate a shop button for each available item.
-    items.forEach(function (item) {
+    const tabs = document.createElement('div');
+    const content = document.createElement('div');
+    const tabNames = [
+      ['gear', 'Upgrade Gear'],
+      ['consumables', 'Consumables'],
+      ['skills', 'Learn Skill'],
+    ];
+
+    tabNames.forEach(function (tab) {
       const button = document.createElement('button');
       button.type = 'button';
-
-      // Prevent purchases the player cannot afford.
-      button.disabled = player.gold < item.price;
-
-      button.textContent = `${item.name} - ${item.price} gold`;
-
-      // Display the item's description.
-      const description = document.createElement('small');
-      description.textContent = item.description;
-      button.appendChild(description);
-
-      // Handle item purchases.
       button.addEventListener('click', function () {
-        if (player.gold < item.price) return;
-
-        // Deduct the cost and add the item to the inventory.
-        player.gold -= item.price;
-        player.addItem(item.id);
-
-        // Refresh the shop to update available purchases.
-        showShop([`Purchased ${item.name}.`]);
+        renderShopTab(tab[0], content);
       });
-
-      elements.shop.appendChild(button);
+      button.textContent = tab[1];
+      tabs.appendChild(button);
     });
+    elements.shop.appendChild(tabs);
+    elements.shop.appendChild(content);
+    renderShopTab('gear', content);
 
     // Add a button to leave the shop and enter preparation.
     const leave = document.createElement('button');
@@ -608,6 +638,145 @@ document.addEventListener('DOMContentLoaded', function () {
     elements.shop.appendChild(leave);
   }
 
+  function chooseLevelUpSkills(pool, count) {
+    const weights = { common: 80, rare: 18, legendary: 2 };
+    const choices = [];
+    const remaining = pool.slice();
+    while (choices.length < count && remaining.length) {
+      const totalWeight = remaining.reduce(function (total, definition) {
+        return total + weights[definition.rarity];
+      }, 0);
+      let roll = Math.random() * totalWeight;
+      let selectedIndex = 0;
+      for (let index = 0; index < remaining.length; index += 1) {
+        roll -= weights[remaining[index].rarity];
+        if (roll < 0) {
+          selectedIndex = index;
+          break;
+        }
+      }
+      choices.push(remaining.splice(selectedIndex, 1)[0]);
+    }
+    return choices;
+  }
+
+  function getUpgradeCost(type) {
+    const upgrade = type === 'weapon'
+      ? gameData.shop.weaponUpgrade : gameData.shop.armorUpgrade;
+    const level = type === 'weapon' ? player.weaponLevel : player.armorLevel;
+    return upgrade.baseCost + level * upgrade.costIncrease;
+  }
+
+  function renderShopTab(tabName, content) {
+    content.replaceChildren();
+    if (tabName === 'gear') {
+      renderGearShop(content);
+    } else if (tabName === 'consumables') {
+      renderConsumableShop(content);
+    } else {
+      renderSkillShop(content);
+    }
+  }
+
+  function addShopPurchaseButton(container, label, description, disabled, purchase) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.disabled = disabled;
+    button.textContent = label;
+    const detail = document.createElement('small');
+    detail.textContent = description;
+    button.appendChild(detail);
+    button.addEventListener('click', purchase);
+    container.appendChild(button);
+  }
+
+  function renderGearShop(container) {
+    const weapon = gameData.shop.weaponUpgrade;
+    const armor = gameData.shop.armorUpgrade;
+    const weaponCost = getUpgradeCost('weapon');
+    const armorCost = getUpgradeCost('armor');
+    addShopPurchaseButton(
+      container,
+      `Upgrade Weapon - ${weaponCost} gold`,
+      `Level ${player.weaponLevel} -> ${player.weaponLevel + 1}; `
+        + `Attack +${weapon.attackIncrease} (${player.attackPower} -> `
+        + `${player.attackPower + weapon.attackIncrease}).`,
+      player.gold < weaponCost,
+      function () {
+        if (player.gold < weaponCost) return;
+        player.gold -= weaponCost;
+        player.upgradeWeapon(weapon.attackIncrease);
+        showShop([`Weapon upgraded to level ${player.weaponLevel}.`]);
+      }
+    );
+    addShopPurchaseButton(
+      container,
+      `Upgrade Armor - ${armorCost} gold`,
+      `Level ${player.armorLevel} -> ${player.armorLevel + 1}; `
+        + `Defense +${armor.defenseIncrease} (${player.defense} -> `
+        + `${player.defense + armor.defenseIncrease}).`,
+      player.gold < armorCost,
+      function () {
+        if (player.gold < armorCost) return;
+        player.gold -= armorCost;
+        player.upgradeArmor(armor.defenseIncrease);
+        showShop([`Armor upgraded to level ${player.armorLevel}.`]);
+      }
+    );
+  }
+
+  function renderConsumableShop(container) {
+    items.forEach(function (item) {
+      addShopPurchaseButton(
+        container,
+        `${item.name} - ${item.price} gold`,
+        item.description,
+        player.gold < item.price,
+        function () {
+          if (player.gold < item.price) return;
+          player.gold -= item.price;
+          player.addItem(item.id);
+          showShop([`Purchased ${item.name}.`]);
+        }
+      );
+    });
+  }
+
+  function renderSkillShop(container) {
+    const learned = player.skills.map(function (skill) {
+      return skill.name;
+    });
+    const available = gameData.levelUpSkills.filter(function (definition) {
+      return !learned.includes(definition.name);
+    });
+    if (!available.length) {
+      const empty = document.createElement('p');
+      empty.textContent = 'You have learned every available skill.';
+      container.appendChild(empty);
+      return;
+    }
+    available.forEach(function (definition) {
+      const cost = getSkillCost(definition);
+      addShopPurchaseButton(
+        container,
+        `${definition.name} - ${cost} gold`,
+        `${definition.description} (${definition.mpCost} MP) [${definition.rarity}]`,
+        player.gold < cost,
+        function () {
+          if (player.gold < cost) return;
+          player.gold -= cost;
+          player.addSkill(new RPG.Skill(definition));
+          showShop([`You learned ${definition.name}.`]);
+        }
+      );
+      container.lastElementChild.classList.add(`skill-rarity-${definition.rarity}`);
+    });
+  }
+
+  function getSkillCost(definition) {
+    return { common: 25, rare: 50, legendary: 100 }[definition.rarity];
+  }
+
 
   // --------------------------------------------------
   // PREPARATION SCREEN
@@ -615,13 +784,17 @@ document.addEventListener('DOMContentLoaded', function () {
   // before beginning the next combat encounter.
   // --------------------------------------------------
 
-  function showPreparation() {
+  function showPreparation(messages) {
+    if (!Array.isArray(messages)) {
+      messages = null;
+    }
     elements.shop.hidden = true;
     elements.preparation.hidden = false;
     elements.preparationPanel.hidden = true;
+    inCombat = false;
 
-    renderOutput([
-      'Shop complete. Review your inventory and stats before continuing.'
+    renderOutput(messages || [
+      'Review your inventory and stats, visit the shop, or start the next fight.'
     ]);
   }
 
@@ -636,11 +809,31 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
 
+    if (view === 'skills') {
+      renderPreparationSkills();
+      return;
+    }
+
     // Otherwise, display the player's statistics.
     const stats = document.createElement('p');
     stats.textContent = formatPlayerStats();
 
     elements.preparationPanel.appendChild(stats);
+  }
+
+  function renderPreparationSkills() {
+    if (!player.skills.length) {
+      const empty = document.createElement('p');
+      empty.textContent = 'No skills learned.';
+      elements.preparationPanel.appendChild(empty);
+      return;
+    }
+    player.skills.forEach(function (skill) {
+      const skillEntry = document.createElement('p');
+      skillEntry.classList.add(`skill-rarity-${skill.rarity}`);
+      skillEntry.textContent = `${skill.name} [${skill.rarity}] - ${skill.description}`;
+      elements.preparationPanel.appendChild(skillEntry);
+    });
   }
 
 
@@ -653,14 +846,20 @@ document.addEventListener('DOMContentLoaded', function () {
   function formatPlayerStats() {
     return `Level ${player.level} ${player.className} | HP ${player.health}/${player.maxHealth} `
       + `| MP ${player.mp}/${player.maxMp} | Attack ${player.attackPower} `
-      + `| Defense ${player.defense} | XP ${player.xp}/${player.xpNeeded()} `
-      + `| Gold ${player.gold}`;
+      + `| Weapon Lv ${player.weaponLevel} | Defense ${player.defense} `
+      + `| Armor Lv ${player.armorLevel} | XP ${player.xp}/${player.xpNeeded()} `
+      + `| Dexterity ${player.dexterity} | Agility ${player.agility} `
+      + `| Crit ${Math.round(player.critChance * 100)}% | Gold ${player.gold}`;
   }
 
   // Generate the complete combat status line.
   function formatStatus() {
-    return `Score: ${defeatedEnemies} | ${formatPlayerStats()} | `
-      + `${enemy.name}: ${enemy.health}/${enemy.maxHealth} HP`;
+    const enemyStatus = inCombat
+      ? `${enemy.name}: ${enemy.health}/${enemy.maxHealth} HP`
+      : `Gold: ${player.gold}`;
+    return `Score: ${defeatedEnemies} | Level ${player.level} | `
+      + `HP ${player.health}/${player.maxHealth} | MP ${player.mp}/${player.maxMp} | `
+      + enemyStatus;
   }
 
 
@@ -691,6 +890,45 @@ document.addEventListener('DOMContentLoaded', function () {
     elements.preparation.hidden = true;
 
     elements.start.hidden = false;
+    elements.share.hidden = false;
+  }
+
+  function shareResults() {
+    const text = `I reached score ${defeatedEnemies} as a level ${player.level} `
+      + `${player.className} in Turn-Based RPG. Play at https://jamisonricks.github.io`;
+    if (typeof navigator !== 'undefined'
+      && navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        renderOutput(['Your result was copied to the clipboard!', text]);
+      }).catch(function () {
+        copyWithLegacyFallback(text);
+      });
+      return;
+    }
+    copyWithLegacyFallback(text);
+  }
+
+  function copyWithLegacyFallback(text) {
+    const copyArea = document.createElement('textarea');
+    copyArea.value = text;
+    copyArea.setAttribute('readonly', '');
+    copyArea.style.position = 'fixed';
+    copyArea.style.left = '-9999px';
+    document.body.appendChild(copyArea);
+    copyArea.select();
+
+    let copied = false;
+    try {
+      copied = document.execCommand('copy');
+    } finally {
+      copyArea.remove();
+    }
+
+    if (!copied) {
+      renderOutput(['Clipboard access is unavailable. Copy this text manually:', text]);
+      return;
+    }
+    renderOutput(['Your result was copied to the clipboard!', text]);
   }
 
 

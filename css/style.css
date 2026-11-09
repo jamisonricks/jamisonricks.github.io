@@ -6,16 +6,19 @@ body {
   padding: 48px 16px;
 }
 #game-output {
+  display: flex;
+  flex-direction: column;
   background: #262647;
   border: 2px solid #6c63a8;
   border-radius: 8px;
   box-sizing: border-box;
-  min-height: 360px;
-  max-width: 640px;
+  min-height: 440px;
+  max-width: 760px;
   padding: 10px;
   margin: 0 auto;
 }
 #game-log {
+  flex: 1;
   min-height: 280px;
 }
 #game-log p {
@@ -28,7 +31,7 @@ body {
   padding: 10px 0;
 }
 #game-input {
-  max-width: 640px;
+  max-width: 760px;
   margin: 20px auto;
   text-align: center;
 }
@@ -65,6 +68,16 @@ body {
   display: block;
   margin-top: 4px;
 }
+#shop > div:first-child {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+#shop > div:first-child button {
+  flex: 1;
+  margin: 0;
+  width: auto;
+}
 #class-selection,
 #level-up {
   margin: 8px auto;
@@ -81,6 +94,11 @@ body {
   display: block;
   margin-top: 4px;
 }
+#preparation-panel p {
+  border-radius: 5px;
+  margin: 8px 0;
+  padding: 10px;
+}
 button {
   background: #6c63a8;
   border: 0;
@@ -93,4 +111,28 @@ button {
 }
 button:hover {
   background: #8278c7;
+}
+.skill-rarity-starter {
+  background: #707070;
+}
+.skill-rarity-common {
+  background: #2f8f46;
+}
+.skill-rarity-rare {
+  background: #2f62b3;
+}
+.skill-rarity-legendary {
+  background: #c87519;
+}
+.skill-rarity-starter:hover {
+  background: #858585;
+}
+.skill-rarity-common:hover {
+  background: #3eaa58;
+}
+.skill-rarity-rare:hover {
+  background: #4278cc;
+}
+.skill-rarity-legendary:hover {
+  background: #df8d2d;
 }

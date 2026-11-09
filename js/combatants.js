@@ -3,12 +3,19 @@
   const RPG = window.RPG;
 
   class Combatant {
-    constructor(name, health, attack, defense) {
+    constructor(name, health, attack, defense, dexterity = 0, agility = 0, critChance = 0) {
       this.name = name;
       this.maxHealth = health;
       this.health = health;
       this.attackPower = attack;
       this.defense = defense;
+      this.dexterity = dexterity;
+      this.agility = agility;
+      this.critChance = critChance;
+      this.outgoingDamageMultiplier = 1;
+      this.incomingDamageMultiplier = 1;
+      this.chargeMultiplier = 1;
+      this.statuses = {};
     }
 
     isAlive() {
@@ -26,12 +33,17 @@
     }
 
     getDamageResult(amount, damageType, applyDamage = true) {
+      if (applyDamage && this.preventNextHit) {
+        this.preventNextHit = false;
+        return { damage: 0, effectiveness: 'normal', prevented: true };
+      }
       const isWeak = (this.weaknesses || []).includes(damageType);
       const isResisted = this.resistance === damageType;
       const isWaking = this.sleepTurns > 0;
       const multiplier = (isWeak
         ? gameData.damageTypes[damageType].multiplier
-        : isResisted ? gameData.resistanceMultiplier : 1) * (isWaking ? 1.2 : 1);
+        : isResisted ? gameData.resistanceMultiplier : 1) * (isWaking ? 1.2 : 1)
+        * this.incomingDamageMultiplier;
       if (isWaking && applyDamage) {
         this.sleepTurns = 0;
       }
@@ -52,12 +64,30 @@
       return this.attackWithResult(target, defenseBonus, damageBonus, damageType).damage;
     }
 
-    attackWithResult(target, defenseBonus = 0, damageBonus = 0, damageType = 'normal') {
+    attackWithResult(target, defenseBonus = 0, damageBonus = 0, damageType = 'normal',
+      guaranteed = false) {
+      const hitChance = guaranteed ? 1 : this.getHitChance(target);
+      if (Math.random() > hitChance) {
+        return { damage: 0, effectiveness: 'normal', hit: false, critical: false };
+      }
+      const critical = guaranteed || Math.random() <= this.critChance;
       const damage = Math.max(
         0,
         this.getAttackPower() + damageBonus - target.getDefense() - defenseBonus,
       );
-      return target.getDamageResult(damage, damageType);
+      const attackMultiplier = critical ? 1.5 : 1;
+      const chargedMultiplier = this.chargeMultiplier;
+      const result = target.getDamageResult(
+        damage * attackMultiplier * chargedMultiplier * this.outgoingDamageMultiplier,
+        damageType
+      );
+      if (result.hit !== false && result.damage > 0) this.chargeMultiplier = 1;
+      return Object.assign(result, { hit: true, critical });
+    }
+
+    getHitChance(target) {
+      return Math.max(0.1, Math.min(0.95,
+        0.75 + (this.dexterity - target.agility) * 0.03));
     }
 
     getAttackPower() {
@@ -67,11 +97,32 @@
     getDefense() {
       return this.defense;
     }
+
+    addStatus(name, duration) {
+      this.statuses[name] = Math.max(this.statuses[name] || 0, duration);
+      this.refreshStatusEffects();
+    }
+
+    tickStatuses() {
+      Object.keys(this.statuses).forEach(function (name) {
+        this.statuses[name] -= 1;
+        if (this.statuses[name] <= 0) delete this.statuses[name];
+      }, this);
+      this.refreshStatusEffects();
+    }
+
+    refreshStatusEffects() {
+      this.outgoingDamageMultiplier = this.statuses.weaken ? 0.75 : 1;
+      this.incomingDamageMultiplier = this.statuses.brittle ? 1.25 : 1;
+      this.spellCostReduction = this.statuses.channelAether ? 3 : 0;
+      this.regenerationPercent = this.statuses.channelAether ? 0.05 : 0;
+    }
   }
 
   class Player extends Combatant {
     constructor(classData) {
-      super(classData.name, classData.health, classData.attack, classData.defense);
+      super(classData.name, classData.health, classData.attack, classData.defense,
+        classData.dexterity, classData.agility, classData.critChance);
       this.className = classData.name;
       this.maxMp = classData.maxMp;
       this.mp = classData.maxMp;
@@ -85,12 +136,23 @@
       this.inventory = {};
       this.attackBuff = 0;
       this.defenseBuff = 0;
+      this.weaponLevel = 0;
+      this.armorLevel = 0;
+      this.passive = classData.passive;
+      this.passiveType = classData.name;
+      this.preventNextHit = classData.name === 'Knight';
+      this.guaranteedAttackReady = false;
+      this.passiveTurns = classData.name === 'Archer' ? RPG.getRandomInt(3) + 2 : 0;
     }
 
     addSkill(skill) { this.skills.push(skill); }
-    canUseSkill(skill) { return this.mp >= skill.mpCost; }
+    getSkillCost(skill) {
+      if (skill.effect.type === 'noHoldsBarred' && this.maxHealth <= 1) return Infinity;
+      return Math.max(0, skill.mpCost - (this.spellCostReduction || 0));
+    }
+    canUseSkill(skill) { return this.mp >= this.getSkillCost(skill); }
     useSkill(skill, target) {
-      this.mp -= skill.mpCost;
+      this.mp -= this.getSkillCost(skill);
       return skill.use(this, target);
     }
     recoverMp(amount) { this.mp = Math.min(this.maxMp, this.mp + amount); }
@@ -100,6 +162,14 @@
     }
     addItem(itemId) {
       this.inventory[itemId] = (this.inventory[itemId] || 0) + 1;
+    }
+    upgradeWeapon(amount) {
+      this.attackPower += amount;
+      this.weaponLevel += 1;
+    }
+    upgradeArmor(amount) {
+      this.defense += amount;
+      this.armorLevel += 1;
     }
     hasItem(itemId) { return (this.inventory[itemId] || 0) > 0; }
     useItem(item) {
@@ -119,19 +189,43 @@
       this.maxMp += growth.maxMp;
       this.mp += growth.maxMp;
     }
-    getAttackPower() { return Math.floor(this.attackPower * (1 + this.attackBuff)); }
+    getAttackPower() {
+      const berserkBonus = this.statuses.berserk ? 0.25 : 0;
+      return Math.floor(this.attackPower * (1 + this.attackBuff + berserkBonus));
+    }
     getDefense() { return Math.floor(this.defense * (1 + this.defenseBuff)); }
     resetCombatBuffs() {
       this.attackBuff = 0;
       this.defenseBuff = 0;
+      this.preventNextHit = this.passiveType === 'Knight';
+      this.guaranteedAttackReady = false;
+      this.passiveTurns = this.passiveType === 'Archer' ? RPG.getRandomInt(3) + 2 : 0;
+    }
+    preparePassive() {
+      if (this.passiveType !== 'Archer' || this.guaranteedAttackReady) return false;
+      this.passiveTurns -= 1;
+      if (this.passiveTurns > 0) return false;
+      this.guaranteedAttackReady = true;
+      this.passiveTurns = RPG.getRandomInt(3) + 2;
+      return true;
+    }
+    consumeGuaranteedAttack() {
+      const ready = this.guaranteedAttackReady;
+      this.guaranteedAttackReady = false;
+      return ready;
     }
     defend() { this.isDefending = true; }
-    endTurn() { this.isDefending = false; }
+    endTurn() {
+      this.isDefending = false;
+      this.tickStatuses();
+      if (this.regenerationPercent) this.heal(this.maxHealth * this.regenerationPercent);
+    }
   }
 
   class Enemy extends Combatant {
-    constructor(name, health, attack, defense, attackChance, weaknesses, resistance) {
-      super(name, health, attack, defense);
+    constructor(name, health, attack, defense, attackChance, weaknesses, resistance,
+      dexterity, agility, critChance) {
+      super(name, health, attack, defense, dexterity, agility, critChance);
       this.attackChance = attackChance;
       this.weaknesses = weaknesses;
       this.resistance = resistance;
@@ -166,26 +260,29 @@
         this.dotTurns -= this.dotTurns > 0 ? 1 : 0;
         messages.push(`${this.name} takes ${result.damage} damage`
           + RPG.formatEffectiveness(result.effectiveness) + '.');
-        if (!this.isAlive()) return { messages, attacked: false };
+        if (!this.isAlive()) return this.finishTurn(messages, false);
       }
       if (this.sleepTurns > 0) {
         this.sleepTurns -= 1;
         messages.push(`${this.name} is asleep and cannot act.`);
-        return { messages, attacked: false };
+        return this.finishTurn(messages, false);
       }
       if (this.paralyzedTurns > 0) {
         this.paralyzedTurns -= 1;
         messages.push(`${this.name} is paralyzed and cannot attack.`);
-        return { messages, attacked: false };
+        return this.finishTurn(messages, false);
       }
       if (Math.random() > this.attackChance) {
         messages.push(`${this.name} does not attack this turn.`);
-        return { messages, attacked: false };
+        return this.finishTurn(messages, false);
       }
       const result = this.attackWithResult(target, target.isDefending ? 2 : 0);
-      messages.push(`${this.name} attacks ${target.name} for ${result.damage} damage`
-        + RPG.formatEffectiveness(result.effectiveness) + '.');
-      return { messages, attacked: true };
+      messages.push(RPG.formatAttackResult(this, target, result));
+      return this.finishTurn(messages, true);
+    }
+    finishTurn(messages, attacked) {
+      this.tickStatuses();
+      return { messages, attacked };
     }
   }
 
