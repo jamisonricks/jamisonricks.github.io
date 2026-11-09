@@ -19,6 +19,7 @@
       this.incomingDamageMultiplier = 1;
       this.chargeMultiplier = 1;
       this.statuses = {};
+      this.damageOverTimeEffects = {};
     }
 
     isAlive() {
@@ -101,25 +102,41 @@
       return this.defense;
     }
 
-    addStatus(name, duration) {
-      this.statuses[name] = Math.max(this.statuses[name] || 0, duration);
+    addStatus(name, duration, sourceId = name) {
+      if (!this.statuses[name]) this.statuses[name] = {};
+      this.statuses[name][sourceId] = Math.max(
+        this.statuses[name][sourceId] || 0,
+        duration
+      );
       this.refreshStatusEffects();
+    }
+
+    hasStatus(name) {
+      return Boolean(this.statuses[name]
+        && Object.keys(this.statuses[name]).some(function (source) {
+          return this.statuses[name][source] > 0;
+        }, this));
     }
 
     tickStatuses() {
       Object.keys(this.statuses).forEach(function (name) {
-        this.statuses[name] -= 1;
-        if (this.statuses[name] <= 0) delete this.statuses[name];
+        Object.keys(this.statuses[name]).forEach(function (sourceId) {
+          this.statuses[name][sourceId] -= 1;
+          if (this.statuses[name][sourceId] <= 0) {
+            delete this.statuses[name][sourceId];
+          }
+        }, this);
+        if (!Object.keys(this.statuses[name]).length) delete this.statuses[name];
       }, this);
       this.refreshStatusEffects();
     }
 
     refreshStatusEffects() {
-      this.outgoingDamageMultiplier = this.statuses.weaken ? 0.75 : 1;
-      this.incomingDamageMultiplier = this.statuses.brittle ? 1.25 : 1;
-      this.spellCostReduction = this.statuses.channelAether ? 3 : 0;
-      this.regenerationPercent = this.statuses.channelAether ? 0.05 : 0;
-      this.critChanceBonus = this.statuses.criticalRush ? 0.3 : 0;
+      this.outgoingDamageMultiplier = this.hasStatus('weaken') ? 0.75 : 1;
+      this.incomingDamageMultiplier = this.hasStatus('brittle') ? 1.25 : 1;
+      this.spellCostReduction = this.hasStatus('channelAether') ? 3 : 0;
+      this.regenerationPercent = this.hasStatus('channelAether') ? 0.05 : 0;
+      this.critChanceBonus = this.hasStatus('criticalRush') ? 0.3 : 0;
     }
   }
 
@@ -180,14 +197,10 @@
     hasItem(itemId) { return (this.inventory[itemId] || 0) > 0; }
     useItem(item, target = this) {
       if (!this.hasItem(item.id)) return false;
-      if (item.effect.type === 'revive') {
-        if (target.isAlive()) return false;
-        target.health = Math.max(1, Math.floor(target.maxHealth * item.effect.healthPercent));
-      }
+      const result = item.use(this, target);
+      if (!result.success) return false;
       this.inventory[item.id] -= 1;
-      if (item.effect.type === 'heal') target.heal(item.effect.amount);
-      if (item.effect.type === 'mp') target.recoverMp(item.effect.amount);
-      return true;
+      return result;
     }
     applyLevelGrowth() {
       const growth = gameData.progression.statGrowth;
@@ -200,7 +213,7 @@
       this.mp += growth.maxMp;
     }
     getAttackPower() {
-      const berserkBonus = this.statuses.berserk ? 0.25 : 0;
+      const berserkBonus = this.hasStatus('berserk') ? 0.25 : 0;
       return Math.floor(this.attackPower * (1 + this.attackBuff + berserkBonus));
     }
     getDefense() { return Math.floor(this.defense * (1 + this.defenseBuff)); }
@@ -248,23 +261,28 @@
     applyStun(duration) {
       this.stunnedTurns = Math.max(this.stunnedTurns, duration);
     }
-    applyDamageOverTime(damage, duration, damageType) {
-      this.dotDamage = damage;
-      this.dotTurns = Math.max(this.dotTurns, duration);
-      this.dotDamageType = damageType;
+    applyDamageOverTime(name, damage, duration, damageType, sourceId = name) {
+      const existing = this.damageOverTimeEffects[sourceId];
+      this.damageOverTimeEffects[sourceId] = {
+        name,
+        damage: existing ? Math.max(existing.damage, damage) : damage,
+        duration: Math.max(existing ? existing.duration : 0, duration),
+        damageType,
+      };
     }
     applySleep(duration) { this.sleepTurns = Math.max(this.sleepTurns, duration); }
     takeTurn(target) {
       const messages = [];
-      if (this.dotTurns > 0) {
-        const damage = this.dotDamage;
-        const damageType = this.dotDamageType;
-        const result = this.getDamageResult(damage, damageType);
-        this.dotTurns -= this.dotTurns > 0 ? 1 : 0;
-        messages.push(`${this.name} takes ${result.damage} damage`
+      Object.keys(this.damageOverTimeEffects).forEach(function (sourceId) {
+        if (!this.isAlive()) return;
+        const dot = this.damageOverTimeEffects[sourceId];
+        const result = this.getDamageResult(dot.damage, dot.damageType);
+        messages.push(`${this.name} took ${result.damage} damage from ${dot.name}`
           + RPG.formatEffectiveness(result.effectiveness) + '.');
-        if (!this.isAlive()) return this.finishTurn(messages, false);
-      }
+        dot.duration -= 1;
+        if (dot.duration <= 0) delete this.damageOverTimeEffects[sourceId];
+      }, this);
+      if (!this.isAlive()) return this.finishTurn(messages, false);
       if (this.sleepTurns > 0) {
         this.sleepTurns -= 1;
         messages.push(`${this.name} is asleep and cannot act.`);

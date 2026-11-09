@@ -37,20 +37,21 @@ window.GAME_DATA = {
         {
           name: 'Whirling Blade',
           rarity: 'starter',
+          targetType: 'allEnemies',
           mpCost: 5,
           description: 'Strike all enemies with a normal-type attack.',
           effect: {
             type: 'damage',
             damageType: 'normal',
             powerBonus: 1,
-            targetMode: 'allEnemies'
           },
         },
         {
           name: 'Heal',
           rarity: 'starter',
+          targetType: 'ally',
           mpCost: 6,
-          description: 'Restore up to 10 HP.',
+          description: 'Restore 10 hp to an ally.',
           effect: {
             type: 'heal',
             amount: 10
@@ -75,10 +76,12 @@ window.GAME_DATA = {
         {
           name: 'Storm Arrow',
           rarity: 'starter',
+          targetType: 'enemy',
           mpCost: 5,
-          description: 'Deal wind damage and damage over time for 3 turns.',
+          description: 'Deal weak wind-type damage and deal damage over time for 3 turns.',
           effect: {
             type: 'damageOverTime',
+            name: 'Wind Shear',
             damageType: 'wind',
             powerBonus: 2,
             damage: 3,
@@ -88,12 +91,12 @@ window.GAME_DATA = {
         {
           name: 'Critical Rush',
           rarity: 'starter',
+          targetType: 'allAllies',
           mpCost: 7,
           description: 'Increase all party members critical chance by 30% for 3 turns.',
           effect: {
             type: 'critBuff',
             targetGroup: 'allies',
-            targetMode: 'allAllies',
             duration: 3,
             percent: 0.3
           },
@@ -117,6 +120,7 @@ window.GAME_DATA = {
         {
           name: 'Scan',
           rarity: 'starter',
+          targetType: 'enemy',
           mpCost: 2,
           description: 'Reveal the enemy weakness and resistance.',
           effect: {
@@ -126,8 +130,9 @@ window.GAME_DATA = {
         {
           name: 'Water Geyser',
           rarity: 'starter',
+          targetType: 'enemy',
           mpCost: 8,
-          description: 'Blast the enemy with a fairly strong water attack.',
+          description: 'Blast the enemy with a strong water attack.',
           effect: {
             type: 'damage',
             damageType: 'water',
@@ -139,10 +144,11 @@ window.GAME_DATA = {
   ],
   levelUpSkills: [
     {
-      name: 'Flame Strike',
+      name: 'Conjure Flame',
       rarity: 'common',
+      targetType: 'enemy',
       mpCost: 5,
-      description: 'Strike with fire for heavy damage: your attack power plus 6 before defense.',
+      description: 'Throw a ball of fire, dealing medium fire-type damage.',
       effect: {
         type: 'damage',
         damageType: 'fire',
@@ -150,10 +156,11 @@ window.GAME_DATA = {
       },
     },
     {
-      name: 'Earth Spike',
+      name: 'Boulder Throw',
       rarity: 'common',
+      targetType: 'enemy',
       mpCost: 6,
-      description: 'Strike the enemy with earth damage.',
+      description: 'Conjure and throw a boulder, dealing medium earth-type damage.',
       effect: {
         type: 'damage',
         damageType: 'earth',
@@ -163,8 +170,9 @@ window.GAME_DATA = {
     {
       name: 'Drain',
       rarity: 'common',
+      targetType: 'enemy',
       mpCost: 7,
-      description: 'Deal normal damage and restore 50% of the damage as HP.',
+      description: 'Deal weak normal-type damage to the enemy and restore 50% of the damage dealt as HP.',
       effect: {
         type: 'lifeSteal',
         damageType: 'normal',
@@ -175,10 +183,12 @@ window.GAME_DATA = {
     {
       name: 'Ember Dart',
       rarity: 'common',
+      targetType: 'enemy',
       mpCost: 4,
-      description: 'Deal weak fire damage and burn the enemy for 3 turns.',
+      description: 'Scorch the enemy, dealing weak fire-type damage applying a burn for 3 turns.',
       effect: {
         type: 'damageOverTime',
+        name: 'Burn',
         damageType: 'fire',
         powerBonus: 1,
         damage: 2,
@@ -188,8 +198,9 @@ window.GAME_DATA = {
     {
       name: 'Heavy Blow',
       rarity: 'common',
+      targetType: 'enemy',
       mpCost: 9,
-      description: 'Deliver a strong normal-type attack.',
+      description: 'Strike the enemy with a powerful attack, dealing heavy normal-type damage.',
       effect: {
         type: 'damage',
         damageType: 'normal',
@@ -199,8 +210,9 @@ window.GAME_DATA = {
     {
       name: 'Sleep',
       rarity: 'common',
+      targetType: 'enemy',
       mpCost: 8,
-      description: 'High chance to put the enemy to sleep for 3 turns.',
+      description: 'Sing a lullaby for an 80% chance to put the enemy asleep for 3 turns.',
       effect: {
         type: 'sleep',
         chance: 0.8,
@@ -210,6 +222,7 @@ window.GAME_DATA = {
     {
       name: 'Battle Cry',
       rarity: 'common',
+      targetType: 'self',
       mpCost: 6,
       description: 'Increase attack by 25% for the current fight.',
       effect: {
@@ -220,6 +233,7 @@ window.GAME_DATA = {
     {
       name: 'Stone Skin',
       rarity: 'common',
+      targetType: 'self',
       mpCost: 6,
       description: 'Increase defense by 25% for the current fight.',
       effect: {
@@ -230,8 +244,9 @@ window.GAME_DATA = {
     {
       name: 'Execute',
       rarity: 'common',
+      targetType: 'enemy',
       mpCost: 10,
-      description: 'Deal weak normal damage with a chance to instantly defeat the enemy.',
+      description: 'Deal weak normal-type damage with a 20% chance to instantly defeat the enemy.',
       effect: {
         type: 'execute',
         damageType: 'normal',
@@ -242,29 +257,44 @@ window.GAME_DATA = {
     {
       name: 'Weaken',
       rarity: 'common',
+      targetType: 'enemy',
       mpCost: 5,
       description: 'The enemy deals 25% less damage for 3 turns.',
-      effect: { type: 'weaken', percent: 0.25, duration: 3 },
+      effect: {
+        type: 'weaken',
+        percent: 0.25,
+        duration: 3
+      },
     },
     {
       name: 'Brittle Armor',
       rarity: 'common',
+      targetType: 'enemy',
       mpCost: 5,
       description: 'The enemy takes 25% more damage for 3 turns.',
-      effect: { type: 'brittle', percent: 0.25, duration: 3 },
+      effect: {
+        type: 'brittle',
+        percent: 0.25,
+        duration: 3
+      },
     },
     {
       name: 'Charge',
       rarity: 'common',
+      targetType: 'self',
       mpCost: 4,
-      description: 'Your next successful attack deals 1.5x damage.',
-      effect: { type: 'charge', multiplier: 1.5 },
+      description: 'Strengthen your focus, increasing your next successful attack damage by 1.5x.',
+      effect: {
+        type: 'charge',
+        multiplier: 1.5
+      },
     },
     {
       name: 'Berserk',
       rarity: 'rare',
+      targetType: 'self',
       mpCost: 8,
-      description: 'Lose 5% max HP, restore 50% max MP, and gain 25% damage for 3 turns.',
+      description: 'Lose 5% max HP, restore 50% max MP, and deal 25% increased damage for 3 turns.',
       effect: {
         type: 'berserk',
         healthPercent: 0.05,
@@ -274,8 +304,21 @@ window.GAME_DATA = {
       },
     },
     {
+      name: 'Tidal Wave',
+      rarity: 'rare',
+      targetType: 'allEnemies',
+      mpCost: 13,
+      description: 'Summon a massive wave of water, dealing medium water-type damage to all enemies',
+      effect: {
+        type: 'damage',
+        damageType: 'water',
+        powerBonus: 8,
+      }
+    },
+    {
       name: 'Channel Aether',
       rarity: 'rare',
+      targetType: 'self',
       mpCost: 6,
       description: 'Spells cost 3 less MP and regenerate 5% max HP for 3 turns.',
       effect: {
@@ -288,16 +331,25 @@ window.GAME_DATA = {
     {
       name: 'No Holds Barred',
       rarity: 'legendary',
+      targetType: 'enemy',
       mpCost: 12,
-      description: 'Deal extreme normal damage, permanently reducing max HP by 1.',
-      effect: { type: 'noHoldsBarred', powerBonus: 40 },
+      description: 'Deal extreme normal-type damage, permanently reducing max HP by 1.',
+      effect: {
+        type: 'noHoldsBarred',
+        powerBonus: 40,
+      },
     },
     {
       name: 'Magic Burst',
       rarity: 'legendary',
+      targetType: 'enemy',
       mpCost: 0,
       description: 'Spend all MP on a powerful attack. Over 20 MP also stuns the enemy.',
-      effect: { type: 'magicBurst', powerPerMp: 2, stunDuration: 1 },
+      effect: {
+        type: 'magicBurst',
+        powerPerMp: 2,
+        stunDuration: 1,
+      },
     },
   ],
   encounter: {
@@ -347,6 +399,7 @@ window.GAME_DATA = {
         type: 'heal',
         amount: 12
       },
+      targetType: 'ally',
     },
     {
       id: 'revival-potion',
@@ -357,6 +410,7 @@ window.GAME_DATA = {
         type: 'revive',
         healthPercent: 0.25
       },
+      targetType: 'ally',
     },
     {
       id: 'mp-potion',
@@ -367,6 +421,7 @@ window.GAME_DATA = {
         type: 'mp',
         amount: 8
       },
+      targetType: 'ally',
     },
     {
       id: 'magnifying-glass',
@@ -376,6 +431,7 @@ window.GAME_DATA = {
       effect: {
         type: 'scan'
       },
+      targetType: 'enemy',
     },
   ],
 };

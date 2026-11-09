@@ -101,7 +101,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Clear any previously generated class buttons.
     elements.classSelection.replaceChildren();
 
-    renderOutput(['Choose your class to begin.']);
+    renderOutput(['Select 2 starting party members to begin.']);
 
     selectedClasses = [];
     gameData.classes.forEach(function (classData) {
@@ -441,10 +441,13 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     elements.skills.hidden = true;
     elements.items.hidden = true;
-    if (type === 'skill' && payload.targetMode !== 'single') {
-      const targets = payload.targetMode === 'allAllies'
-        ? party.filter(function (member) { return member.isAlive(); })
-        : enemies.filter(function (enemy) { return enemy.isAlive(); });
+    const targetType = payload.targetType || 'enemy';
+    if (targetType === 'self' || targetType === 'allEnemies' || targetType === 'allAllies') {
+      const targets = targetType === 'self'
+        ? [actor]
+        : targetType === 'allAllies'
+          ? party.filter(function (member) { return member.isAlive(); })
+          : enemies.filter(function (enemy) { return enemy.isAlive(); });
       selectTarget({ type, payload }, targets);
       return;
     }
@@ -458,21 +461,21 @@ document.addEventListener('DOMContentLoaded', function () {
     const effect = payload && payload.effect;
     const allies = party.filter(function (member) { return member.isAlive(); });
     const fallenAllies = party.filter(function (member) { return !member.isAlive(); });
-    const allySkill = effect && ['heal', 'attackBuff', 'defenseBuff'].includes(effect.type);
-    const targets = type === 'item' && payload.effect.type === 'scan'
+    const targetType = payload.targetType || 'enemy';
+    const targets = effect && effect.type === 'revive' ? fallenAllies
+      : targetType === 'enemy'
       ? enemies.filter(function (target) { return target.isAlive(); })
-      : type === 'item' && payload.effect.type === 'revive' ? fallenAllies
-      : type === 'item' ? allies
-      : allySkill || effect && effect.targetGroup === 'allies' ? allies
-        : enemies.filter(function (target) {
-        return target.isAlive();
-      });
-    const allTargets = payload && payload.targetMode === 'allEnemies'
+      : targetType === 'ally' ? allies
+        : targetType === 'self' ? [actor]
+          : targetType === 'allEnemies'
+            ? enemies.filter(function (target) { return target.isAlive(); })
+            : targetType === 'allAllies' ? allies : fallenAllies;
+    const allTargets = targetType === 'allEnemies'
       ? enemies.filter(function (target) { return target.isAlive(); })
-      : payload && payload.targetMode === 'allAllies' ? allies : null;
+      : targetType === 'allAllies' ? allies : null;
     if (allTargets) {
       addTargetButton(`${payload.name} (all valid targets)`, function () {
-        selectTarget(payload, allTargets);
+        selectTarget({ type, payload }, allTargets);
       });
       return;
     }
@@ -632,11 +635,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     if (action.type === 'item') {
       const item = action.payload;
-      player.useItem(item, action.targets[0]);
-      if (item.effect.type === 'scan') {
-        return `${actor.name} uses a ${item.name}. ${RPG.describeEnemy(action.targets[0])}`;
-      }
-      return `${actor.name} uses a ${item.name} on ${action.targets[0].name}.`;
+      const result = player.useItem(item, action.targets[0]);
+      return result.message;
     }
     return actor.useSkill(action.payload, action.targets);
   }

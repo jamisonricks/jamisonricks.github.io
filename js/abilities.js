@@ -1,6 +1,41 @@
 (function () {
   const RPG = window.RPG;
 
+  RPG.applyEffect = function (actor, target, effect, sourceName) {
+    const targets = Array.isArray(target) ? target : [target];
+    const messages = [];
+    targets.forEach(function (recipient) {
+      if (!recipient) return;
+      if (effect.type === 'heal') {
+        messages.push(`${actor.name} used ${sourceName} on ${recipient.name}. `
+          + `${recipient.name} recovered ${recipient.heal(effect.amount)} health.`);
+      } else if (effect.type === 'mp') {
+        recipient.recoverMp(effect.amount);
+        messages.push(`${actor.name} used ${sourceName} on ${recipient.name}. `
+          + `${recipient.name} recovered ${effect.amount} MP.`);
+      } else if (effect.type === 'revive' && !recipient.isAlive()) {
+        recipient.health = Math.max(1, Math.floor(recipient.maxHealth * effect.healthPercent));
+        messages.push(`${actor.name} used ${sourceName} on ${recipient.name}. `
+          + `${recipient.name} was revived.`);
+      } else if (effect.type === 'damage') {
+        const result = actor.attackWithResult(
+          recipient, 0, effect.powerBonus || 0, effect.damageType || 'normal'
+        );
+        messages.push(formatGenericDamage(actor, sourceName, recipient, result));
+      } else if (effect.type === 'scan') {
+        messages.push(`${actor.name} used ${sourceName}. ${RPG.describeEnemy(recipient)}`);
+      }
+    });
+    return { success: messages.length > 0, message: messages.join(' ') };
+  };
+
+  function formatGenericDamage(actor, sourceName, target, result) {
+    if (!result.hit) return `${actor.name} used ${sourceName} on ${target.name}. `
+      + `${target.name} dodged the attack.`;
+    return `${actor.name} used ${sourceName} on ${target.name}. `
+      + `${target.name} took ${result.damage} damage.`;
+  }
+
   class Skill {
     constructor(definition) {
       this.name = definition.name;
@@ -8,7 +43,7 @@
       this.mpCost = definition.mpCost;
       this.description = definition.description;
       this.effect = definition.effect;
-      this.targetMode = definition.targetMode || this.effect.targetMode || 'single';
+      this.targetType = definition.targetType || this.effect.targetType || 'enemy';
     }
 
     getDescription(player, target) {
@@ -27,7 +62,7 @@
       if (Array.isArray(target)) {
         if (this.effect.type === 'critBuff') {
           target.forEach(function (recipient) {
-            recipient.addStatus('criticalRush', this.effect.duration + 1);
+            recipient.addStatus('criticalRush', this.effect.duration + 1, this.name);
           }, this);
           return `${player.name} raised the parties critical chance by `
             + `${this.effect.percent * 100}%.`;
@@ -53,11 +88,20 @@
         return `${player.name} used ${this.name} on ${recipient.name}. `
           + `${recipient.name} recovered ${recipient.heal(effect.amount)} health.`;
       }
+      if (effect.type === 'revive' || effect.type === 'mp') {
+        return RPG.applyEffect(player, target || player, effect, this.name).message;
+      }
       if (effect.type === 'damageOverTime') {
         player.damageBuff = 0;
         const result = damage();
         if (!result.hit) return `${this.name} misses and fails to apply damage over time to ${target.name}.`;
-        target.applyDamageOverTime(effect.damage, effect.duration, effect.damageType);
+        target.applyDamageOverTime(
+          effect.name || this.name,
+          effect.damage,
+          effect.duration,
+          effect.damageType,
+          this.name
+        );
         return formatSkillAttack(player, this.name, target, result)
           + (result.hit ? ` ${target.name} is affected by damage over time.` : '');
       }
@@ -94,12 +138,12 @@
           + `${recipient.name}'s defense rose by ${effect.percent * 100}%.`;
       }
       if (effect.type === 'weaken') {
-        target.addStatus('weaken', effect.duration);
+        target.addStatus('weaken', effect.duration, this.name);
         return `${player.name} used ${this.name} on ${target.name}. `
           + `${target.name} is weakened and deals 25% less damage for ${effect.duration} turns.`;
       }
       if (effect.type === 'brittle') {
-        target.addStatus('brittle', effect.duration);
+        target.addStatus('brittle', effect.duration, this.name);
         return `${player.name} used ${this.name} on ${target.name}. `
           + `${target.name}'s armor is brittle and it takes 25% more damage for ${effect.duration} turns.`;
       }
@@ -115,12 +159,12 @@
         );
         player.takeDamage(healthLoss);
         player.recoverMp(Math.floor(player.maxMp * effect.mpPercent));
-        player.addStatus('berserk', effect.duration + 1);
+        player.addStatus('berserk', effect.duration + 1, this.name);
         return `${player.name} used ${this.name}. ${player.name} enters a berserk state, loses ${healthLoss} HP, `
           + `and restores MP.`;
       }
       if (effect.type === 'channelAether') {
-        player.addStatus('channelAether', effect.duration + 1);
+        player.addStatus('channelAether', effect.duration + 1, this.name);
         return `${player.name} used ${this.name}. `
           + `${player.name} channels aether for ${effect.duration} turns.`;
       }
@@ -144,7 +188,7 @@
       }
       if (effect.type === 'critBuff') {
         const recipient = target || player;
-        recipient.addStatus('criticalRush', effect.duration + 1);
+        recipient.addStatus('criticalRush', effect.duration + 1, this.name);
         return `${player.name} raised the parties critical chance by ${effect.percent * 100}%.`;
       }
       if (effect.type === 'execute') {
@@ -166,7 +210,7 @@
         }
         if (result.prevented) {
           return `${player.name} used ${skillName} on ${target.name}. `
-            + `${target.name}'s passive blocked the hit completely.`;
+            + `${target.name} blocked the hit completely.`;
         }
         const criticalText = result.critical ? ' Critical hit!' : '';
         return `${player.name} used ${skillName} on ${target.name}. `
@@ -180,6 +224,11 @@
   class Item {
     constructor(definition) {
       Object.assign(this, definition);
+      this.targetType = definition.targetType || 'self';
+    }
+
+    use(actor, target) {
+      return RPG.applyEffect(actor, target, this.effect, this.name);
     }
   }
 
