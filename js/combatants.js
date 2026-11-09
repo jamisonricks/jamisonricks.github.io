@@ -98,7 +98,9 @@
       return gameData.progression.firstLevelXp
         + (this.level - 1) * gameData.progression.xpIncreasePerLevel;
     }
-    addItem(itemId) { this.inventory[itemId] = (this.inventory[itemId] || 0) + 1; }
+    addItem(itemId) {
+      this.inventory[itemId] = (this.inventory[itemId] || 0) + 1;
+    }
     hasItem(itemId) { return (this.inventory[itemId] || 0) > 0; }
     useItem(item) {
       if (!this.hasItem(item.id)) return false;
