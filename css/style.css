@@ -12,14 +12,14 @@ body {
   border: 2px solid #6c63a8;
   border-radius: 8px;
   box-sizing: border-box;
-  min-height: 440px;
+  min-height: 560px;
   max-width: 760px;
   padding: 10px;
   margin: 0 auto;
 }
 #game-log {
   flex: 1;
-  min-height: 280px;
+  min-height: 250px;
 }
 #game-log p {
   margin: 12px 0;
@@ -32,6 +32,49 @@ body {
   border-top: 1px solid #6c63a8;
   min-height: 24px;
   padding: 10px 0;
+}
+#battlefield {
+  border-bottom: 1px solid #6c63a8;
+  padding: 12px 0;
+}
+.battlefield-row {
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  min-height: 58px;
+}
+.battlefield-combatant {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 44px;
+}
+.battlefield-icon {
+  font-family: monospace;
+  font-size: 24px;
+  line-height: 24px;
+}
+.battlefield-combatant.defeated {
+  opacity: 0.35;
+}
+.battlefield-bar {
+  background: #17172a;
+  border: 1px solid #11111f;
+  border-radius: 3px;
+  height: 8px;
+  overflow: hidden;
+  width: 52px;
+}
+.battlefield-bar-fill {
+  height: 100%;
+  transition: width 150ms ease;
+}
+.health-bar .battlefield-bar-fill {
+  background: #42bd62;
+}
+.mp-bar .battlefield-bar-fill {
+  background: #4b9ee8;
 }
 .status-quadrant,
 .status-summary {

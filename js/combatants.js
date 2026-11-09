@@ -145,6 +145,7 @@
       super(classData.name, classData.health, classData.attack, classData.defense,
         classData.dexterity, classData.agility, classData.critChance, classData.speed);
       this.className = classData.name;
+      this.icon = classData.icon;
       this.maxMp = classData.maxMp;
       this.mp = classData.maxMp;
       this.isDefending = false;

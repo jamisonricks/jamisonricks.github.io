@@ -22,6 +22,7 @@ window.GAME_DATA = {
   classes: [
     {
       name: 'Knight',
+      icon: 'o/',
       description: 'A balanced fighter with strong attacks and healing.',
       health: 30,
       attack: 8,
@@ -61,6 +62,7 @@ window.GAME_DATA = {
     },
     {
       name: 'Archer',
+      icon: 'oD',
       description: 'A ranged fighter who strengthens allies and weakens enemies.',
       health: 26,
       attack: 9,
@@ -105,6 +107,7 @@ window.GAME_DATA = {
     },
     {
       name: 'Mage',
+      icon: 'oT',
       description: 'A spellcaster who studies enemies and commands water magic.',
       health: 22,
       attack: 7,

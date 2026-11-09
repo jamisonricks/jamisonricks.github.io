@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // Cache frequently used HTML elements to avoid repeatedly searching the DOM.
   const elements = {
     gameLog: document.getElementById('game-log'),
+    battlefield: document.getElementById('battlefield'),
     gameStatus: document.getElementById('game-status'),
     start: document.getElementById('start-game'),
     classSelection: document.getElementById('class-selection'),
@@ -441,7 +442,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     elements.skills.hidden = true;
     elements.items.hidden = true;
-    const targetType = payload.targetType || 'enemy';
+    const targetType = payload && payload.targetType || 'enemy';
     if (targetType === 'self' || targetType === 'allEnemies' || targetType === 'allAllies') {
       const targets = targetType === 'self'
         ? [actor]
@@ -461,7 +462,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const effect = payload && payload.effect;
     const allies = party.filter(function (member) { return member.isAlive(); });
     const fallenAllies = party.filter(function (member) { return !member.isAlive(); });
-    const targetType = payload.targetType || 'enemy';
+    const targetType = payload && payload.targetType || 'enemy';
     const targets = effect && effect.type === 'revive' ? fallenAllies
       : targetType === 'enemy'
       ? enemies.filter(function (target) { return target.isAlive(); })
@@ -474,7 +475,7 @@ document.addEventListener('DOMContentLoaded', function () {
       ? enemies.filter(function (target) { return target.isAlive(); })
       : targetType === 'allAllies' ? allies : null;
     if (allTargets) {
-      addTargetButton(`${payload.name} (all valid targets)`, function () {
+      addTargetButton(`${payload ? payload.name : type} (all valid targets)`, function () {
         selectTarget({ type, payload }, allTargets);
       });
       return;
@@ -1218,6 +1219,58 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Update the status bar if a player exists.
     renderStatus();
+    renderBattlefield();
+  }
+
+  function renderBattlefield() {
+    elements.battlefield.replaceChildren();
+    elements.battlefield.hidden = !inCombat || !party.length;
+    if (elements.battlefield.hidden) return;
+
+    const enemyRow = document.createElement('div');
+    enemyRow.className = 'battlefield-row battlefield-enemies';
+    enemies.forEach(function (enemy) {
+      const combatant = document.createElement('div');
+      combatant.className = `battlefield-combatant${enemy.isAlive() ? '' : ' defeated'}`;
+      combatant.title = enemy.name;
+      const icon = document.createElement('span');
+      icon.className = 'battlefield-icon';
+      icon.textContent = 'x';
+      combatant.appendChild(icon);
+      combatant.appendChild(createBattleBar(enemy.health, enemy.maxHealth, 'health-bar'));
+      enemyRow.appendChild(combatant);
+    });
+    elements.battlefield.appendChild(enemyRow);
+
+    const partyRow = document.createElement('div');
+    partyRow.className = 'battlefield-row battlefield-party';
+    party.forEach(function (member) {
+      const combatant = document.createElement('div');
+      combatant.className = `battlefield-combatant${member.isAlive() ? '' : ' defeated'}`;
+      combatant.title = member.name;
+      const icon = document.createElement('span');
+      icon.className = 'battlefield-icon';
+      icon.textContent = member.icon;
+      combatant.appendChild(icon);
+      combatant.appendChild(createBattleBar(member.health, member.maxHealth, 'health-bar'));
+      combatant.appendChild(createBattleBar(member.mp, member.maxMp, 'mp-bar'));
+      partyRow.appendChild(combatant);
+    });
+    elements.battlefield.appendChild(partyRow);
+  }
+
+  function createBattleBar(value, maximum, className) {
+    const bar = document.createElement('div');
+    bar.className = `battlefield-bar ${className}`;
+    bar.setAttribute('role', 'progressbar');
+    bar.setAttribute('aria-valuemin', '0');
+    bar.setAttribute('aria-valuemax', String(maximum));
+    bar.setAttribute('aria-valuenow', String(value));
+    const fill = document.createElement('div');
+    fill.className = 'battlefield-bar-fill';
+    fill.style.width = `${maximum ? Math.max(0, Math.min(100, value / maximum * 100)) : 0}%`;
+    bar.appendChild(fill);
+    return bar;
   }
 
   function renderStatus() {
