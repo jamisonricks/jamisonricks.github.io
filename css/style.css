@@ -25,10 +25,45 @@ body {
   margin: 12px 0;
 }
 #game-status {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
   border-bottom: 1px solid #6c63a8;
   border-top: 1px solid #6c63a8;
   min-height: 24px;
   padding: 10px 0;
+}
+.status-quadrant,
+.status-summary {
+  background: #30305a;
+  border-radius: 4px;
+  padding: 6px;
+  text-align: center;
+}
+.status-summary {
+  grid-column: 1 / -1;
+}
+#party-turn-list {
+  margin-bottom: 8px;
+}
+#party-turn-list button {
+  padding: 6px 10px;
+}
+#party-turn-list button.active-party-member {
+  outline: 3px solid #f5f5f5;
+}
+.recruit-unavailable {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+#target-list {
+  margin: 8px auto;
+  max-width: 440px;
+}
+#target-list button {
+  display: block;
+  margin: 8px auto;
+  width: 100%;
 }
 #game-input {
   max-width: 760px;
@@ -78,6 +113,9 @@ body {
   margin: 0;
   width: auto;
 }
+#shop > div:first-child button.selected-shop-tab {
+  outline: 3px solid #f5f5f5;
+}
 #class-selection,
 #level-up {
   margin: 8px auto;
@@ -88,6 +126,12 @@ body {
   display: block;
   margin: 8px auto;
   width: 100%;
+}
+#class-selection button.selected-class {
+  outline: 3px solid #f5f5f5;
+}
+#preparation > button.selected-preparation-view {
+  outline: 3px solid #f5f5f5;
 }
 #class-selection small,
 #level-up small {

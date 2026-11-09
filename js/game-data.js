@@ -29,6 +29,7 @@ window.GAME_DATA = {
       dexterity: 7,
       agility: 5,
       critChance: 0.1,
+      speed: 7,
       passive: 'Bulwark: the first hit you take in each fight deals no damage.',
       startingItems: ['health-potion'],
       maxMp: 20,
@@ -65,6 +66,7 @@ window.GAME_DATA = {
       dexterity: 10,
       agility: 8,
       critChance: 0.15,
+      speed: 10,
       passive: 'Deadeye: after a few random turns, your next attack is guaranteed to hit and critically hit.',
       startingItems: ['magnifying-glass'],
       maxMp: 24,
@@ -75,7 +77,7 @@ window.GAME_DATA = {
           mpCost: 5,
           description: 'Deal wind damage and damage over time for 3 turns.',
           effect: {
-            type: 'poison',
+            type: 'damageOverTime',
             damageType: 'wind',
             powerBonus: 2,
             damage: 3,
@@ -83,15 +85,16 @@ window.GAME_DATA = {
           },
         },
         {
-          name: 'Paralyzing Shot',
+          name: 'Critical Rush',
           rarity: 'starter',
           mpCost: 7,
-          description: 'Deal damage and prevent the enemy from attacking next turn.',
+          description: 'Increase all party members critical chance by 30% for 3 turns.',
           effect: {
-            type: 'paralyze',
-            damageType: 'normal',
-            powerBonus: 1,
-            duration: 1
+            type: 'critBuff',
+            targetGroup: 'allies',
+            targetMode: 'allAllies',
+            duration: 3,
+            percent: 0.3
           },
         },
       ],
@@ -105,6 +108,7 @@ window.GAME_DATA = {
       dexterity: 8,
       agility: 5,
       critChance: 0.1,
+      speed: 8,
       passive: 'Meditation: basic attacks restore 2 MP.',
       startingItems: ['mp-potion'],
       maxMp: 30,
@@ -296,10 +300,12 @@ window.GAME_DATA = {
     defenseRandomness: 3,
     baseDexterity: 6,
     dexterityRandomness: 5,
-    baseAgility: 5,
-    agilityRandomness: 5,
+    baseAgility: 2,
+    agilityRandomness: 3,
     baseCritChance: 0.08,
     critChanceRandomness: 0.08,
+    baseSpeed: 5,
+    speedRandomness: 4,
     baseAttackChance: 0.45,
     attackChancePerDefeat: 0.04,
     attackChanceRandomness: 0.2,
@@ -328,6 +334,16 @@ window.GAME_DATA = {
       effect: {
         type: 'heal',
         amount: 12
+      },
+    },
+    {
+      id: 'revival-potion',
+      name: 'Revival Potion',
+      description: 'Revive a fallen ally with 25% of their max HP.',
+      price: 25,
+      effect: {
+        type: 'revive',
+        healthPercent: 0.25
       },
     },
     {

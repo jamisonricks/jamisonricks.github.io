@@ -3,7 +3,8 @@
   const RPG = window.RPG;
 
   class Combatant {
-    constructor(name, health, attack, defense, dexterity = 0, agility = 0, critChance = 0) {
+    constructor(name, health, attack, defense, dexterity = 0, agility = 0, critChance = 0,
+      speed = 0) {
       this.name = name;
       this.maxHealth = health;
       this.health = health;
@@ -12,6 +13,8 @@
       this.dexterity = dexterity;
       this.agility = agility;
       this.critChance = critChance;
+      this.critChanceBonus = 0;
+      this.speed = speed;
       this.outgoingDamageMultiplier = 1;
       this.incomingDamageMultiplier = 1;
       this.chargeMultiplier = 1;
@@ -70,7 +73,7 @@
       if (Math.random() > hitChance) {
         return { damage: 0, effectiveness: 'normal', hit: false, critical: false };
       }
-      const critical = guaranteed || Math.random() <= this.critChance;
+      const critical = guaranteed || Math.random() <= this.critChance + this.critChanceBonus;
       const damage = Math.max(
         0,
         this.getAttackPower() + damageBonus - target.getDefense() - defenseBonus,
@@ -116,13 +119,14 @@
       this.incomingDamageMultiplier = this.statuses.brittle ? 1.25 : 1;
       this.spellCostReduction = this.statuses.channelAether ? 3 : 0;
       this.regenerationPercent = this.statuses.channelAether ? 0.05 : 0;
+      this.critChanceBonus = this.statuses.criticalRush ? 0.3 : 0;
     }
   }
 
   class Player extends Combatant {
     constructor(classData) {
       super(classData.name, classData.health, classData.attack, classData.defense,
-        classData.dexterity, classData.agility, classData.critChance);
+        classData.dexterity, classData.agility, classData.critChance, classData.speed);
       this.className = classData.name;
       this.maxMp = classData.maxMp;
       this.mp = classData.maxMp;
@@ -143,6 +147,8 @@
       this.preventNextHit = classData.name === 'Knight';
       this.guaranteedAttackReady = false;
       this.passiveTurns = classData.name === 'Archer' ? RPG.getRandomInt(3) + 2 : 0;
+      this.classData = classData;
+      this.pendingLevelUps = 0;
     }
 
     addSkill(skill) { this.skills.push(skill); }
@@ -172,11 +178,15 @@
       this.armorLevel += 1;
     }
     hasItem(itemId) { return (this.inventory[itemId] || 0) > 0; }
-    useItem(item) {
+    useItem(item, target = this) {
       if (!this.hasItem(item.id)) return false;
+      if (item.effect.type === 'revive') {
+        if (target.isAlive()) return false;
+        target.health = Math.max(1, Math.floor(target.maxHealth * item.effect.healthPercent));
+      }
       this.inventory[item.id] -= 1;
-      if (item.effect.type === 'heal') this.heal(item.effect.amount);
-      if (item.effect.type === 'mp') this.recoverMp(item.effect.amount);
+      if (item.effect.type === 'heal') target.heal(item.effect.amount);
+      if (item.effect.type === 'mp') target.recoverMp(item.effect.amount);
       return true;
     }
     applyLevelGrowth() {
@@ -224,25 +234,19 @@
 
   class Enemy extends Combatant {
     constructor(name, health, attack, defense, attackChance, weaknesses, resistance,
-      dexterity, agility, critChance) {
-      super(name, health, attack, defense, dexterity, agility, critChance);
+      dexterity, agility, critChance, speed) {
+      super(name, health, attack, defense, dexterity, agility, critChance, speed);
       this.attackChance = attackChance;
       this.weaknesses = weaknesses;
       this.resistance = resistance;
-      this.poisonTurns = 0;
-      this.poisonDamage = 0;
-      this.paralyzedTurns = 0;
+      this.stunnedTurns = 0;
       this.sleepTurns = 0;
       this.dotTurns = 0;
       this.dotDamage = 0;
       this.dotDamageType = 'normal';
     }
-    applyPoison(damage, duration) {
-      this.poisonDamage = damage;
-      this.poisonTurns = Math.max(this.poisonTurns, duration);
-    }
-    applyParalysis(duration) {
-      this.paralyzedTurns = Math.max(this.paralyzedTurns, duration);
+    applyStun(duration) {
+      this.stunnedTurns = Math.max(this.stunnedTurns, duration);
     }
     applyDamageOverTime(damage, duration, damageType) {
       this.dotDamage = damage;
@@ -252,11 +256,10 @@
     applySleep(duration) { this.sleepTurns = Math.max(this.sleepTurns, duration); }
     takeTurn(target) {
       const messages = [];
-      if (this.poisonTurns > 0 || this.dotTurns > 0) {
-        const damage = this.poisonTurns > 0 ? this.poisonDamage : this.dotDamage;
-        const damageType = this.poisonTurns > 0 ? 'wind' : this.dotDamageType;
+      if (this.dotTurns > 0) {
+        const damage = this.dotDamage;
+        const damageType = this.dotDamageType;
         const result = this.getDamageResult(damage, damageType);
-        this.poisonTurns -= this.poisonTurns > 0 ? 1 : 0;
         this.dotTurns -= this.dotTurns > 0 ? 1 : 0;
         messages.push(`${this.name} takes ${result.damage} damage`
           + RPG.formatEffectiveness(result.effectiveness) + '.');
@@ -267,9 +270,9 @@
         messages.push(`${this.name} is asleep and cannot act.`);
         return this.finishTurn(messages, false);
       }
-      if (this.paralyzedTurns > 0) {
-        this.paralyzedTurns -= 1;
-        messages.push(`${this.name} is paralyzed and cannot attack.`);
+      if (this.stunnedTurns > 0) {
+        this.stunnedTurns -= 1;
+        messages.push(`${this.name} is stunned and cannot act.`);
         return this.finishTurn(messages, false);
       }
       if (Math.random() > this.attackChance) {

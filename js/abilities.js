@@ -8,21 +8,34 @@
       this.mpCost = definition.mpCost;
       this.description = definition.description;
       this.effect = definition.effect;
+      this.targetMode = definition.targetMode || this.effect.targetMode || 'single';
     }
 
     getDescription(player, target) {
       const effect = this.effect;
-      if (!['damage', 'poison', 'paralyze', 'damageOverTime', 'lifeSteal', 'execute']
+      if (!['damage', 'damageOverTime', 'lifeSteal', 'execute']
         .includes(effect.type)) return this.description;
       const baseDamage = Math.max(0, player.getAttackPower() + (effect.powerBonus || 0)
         + player.damageBuff - target.getDefense());
       const result = target.getDamageResult(baseDamage, effect.damageType, false);
-      const damageOverTime = ['poison', 'damageOverTime'].includes(effect.type)
+      const damageOverTime = effect.type === 'damageOverTime'
         ? ` + ${effect.damage} damage over ${effect.duration} turns` : '';
       return `${this.description} Damage: ${result.damage}${damageOverTime}.`;
     }
 
     use(player, target) {
+      if (Array.isArray(target)) {
+        if (this.effect.type === 'critBuff') {
+          target.forEach(function (recipient) {
+            recipient.addStatus('criticalRush', this.effect.duration + 1);
+          }, this);
+          return `${player.name} raised the parties critical chance by `
+            + `${this.effect.percent * 100}%.`;
+        }
+        return target.map(function (singleTarget) {
+          return this.use(player, singleTarget);
+        }, this).join(' ');
+      }
       const effect = this.effect;
       const damageBonus = player.damageBuff;
       const damage = function () {
@@ -33,69 +46,67 @@
       if (effect.type === 'damage') {
         player.damageBuff = 0;
         const result = damage();
-        return RPG.formatAttackResult(player, target, result).replace(
-          `${player.name} attacks`, `${this.name} attacks`);
+        return formatSkillAttack(player, this.name, target, result);
       }
-      if (effect.type === 'heal') return `${player.name} restores ${player.heal(effect.amount)} HP.`;
-      if (effect.type === 'poison') {
-        player.damageBuff = 0;
-        const result = damage();
-        if (!result.hit) return `${this.name} misses and fails to poison ${target.name}.`;
-        target.applyPoison(effect.damage, effect.duration);
-        return `${RPG.formatAttackResult(player, target, result)}`
-          + ` and poisons ${target.name}.`;
+      if (effect.type === 'heal') {
+        const recipient = target || player;
+        return `${player.name} used ${this.name} on ${recipient.name}. `
+          + `${recipient.name} recovered ${recipient.heal(effect.amount)} health.`;
       }
-      if (effect.type === 'paralyze') {
-        player.damageBuff = 0;
-        const result = damage();
-        if (!result.hit) return `${this.name} misses and fails to paralyze ${target.name}.`;
-        target.applyParalysis(effect.duration);
-        return `${RPG.formatAttackResult(player, target, result)}`
-          + ` and paralyzes ${target.name}.`;
-      }
-      if (effect.type === 'scan') return RPG.describeEnemy(target);
       if (effect.type === 'damageOverTime') {
         player.damageBuff = 0;
         const result = damage();
-        if (!result.hit) return `${this.name} misses and fails to apply damage over time.`;
+        if (!result.hit) return `${this.name} misses and fails to apply damage over time to ${target.name}.`;
         target.applyDamageOverTime(effect.damage, effect.duration, effect.damageType);
-        return `${RPG.formatAttackResult(player, target, result)}`
-          + ' and applies damage over time.';
+        return formatSkillAttack(player, this.name, target, result)
+          + (result.hit ? ` ${target.name} is affected by damage over time.` : '');
+      }
+      if (effect.type === 'scan') {
+        return `${player.name} used ${this.name}. ${RPG.describeEnemy(target)}`;
       }
       if (effect.type === 'lifeSteal') {
         player.damageBuff = 0;
         const result = damage();
         const healed = player.heal(Math.floor(result.damage * effect.healPercent));
-        if (!result.hit) return `${this.name} misses and restores no HP.`;
-        return `${RPG.formatAttackResult(player, target, result)}`
-          + ` and restores ${healed} HP.`;
+        if (!result.hit) return formatSkillAttack(player, this.name, target, result);
+        return `${formatSkillAttack(player, this.name, target, result)} `
+          + `${player.name} recovered ${healed} health.`;
       }
       if (effect.type === 'sleep') {
         if (Math.random() <= effect.chance) {
           target.applySleep(effect.duration);
-          return `${this.name} puts ${target.name} to sleep for ${effect.duration} turns.`;
+          return `${player.name} used ${this.name} on ${target.name}. `
+            + `${target.name} fell asleep for ${effect.duration} turns.`;
         }
-        return `${this.name} fails to put ${target.name} to sleep.`;
+        return `${player.name} used ${this.name} on ${target.name}. `
+          + `${target.name} resisted sleep.`;
       }
       if (effect.type === 'attackBuff') {
-        player.attackBuff += effect.percent;
-        return `${player.name}'s attack rises by ${effect.percent * 100}%.`;
+        const recipient = target || player;
+        recipient.attackBuff += effect.percent;
+        return `${player.name} used ${this.name} on ${recipient.name}. `
+          + `${recipient.name}'s attack rose by ${effect.percent * 100}%.`;
       }
       if (effect.type === 'defenseBuff') {
-        player.defenseBuff += effect.percent;
-        return `${player.name}'s defense rises by ${effect.percent * 100}%.`;
+        const recipient = target || player;
+        recipient.defenseBuff += effect.percent;
+        return `${player.name} used ${this.name} on ${recipient.name}. `
+          + `${recipient.name}'s defense rose by ${effect.percent * 100}%.`;
       }
       if (effect.type === 'weaken') {
         target.addStatus('weaken', effect.duration);
-        return `${target.name} is weakened and deals 25% less damage for ${effect.duration} turns.`;
+        return `${player.name} used ${this.name} on ${target.name}. `
+          + `${target.name} is weakened and deals 25% less damage for ${effect.duration} turns.`;
       }
       if (effect.type === 'brittle') {
         target.addStatus('brittle', effect.duration);
-        return `${target.name}'s armor is brittle and it takes 25% more damage for ${effect.duration} turns.`;
+        return `${player.name} used ${this.name} on ${target.name}. `
+          + `${target.name}'s armor is brittle and it takes 25% more damage for ${effect.duration} turns.`;
       }
       if (effect.type === 'charge') {
         player.chargeMultiplier = effect.multiplier;
-        return `${player.name} charges their next successful attack.`;
+        return `${player.name} used ${this.name}. `
+          + `${player.name} charges their next successful attack.`;
       }
       if (effect.type === 'berserk') {
         const healthLoss = Math.min(
@@ -105,20 +116,20 @@
         player.takeDamage(healthLoss);
         player.recoverMp(Math.floor(player.maxMp * effect.mpPercent));
         player.addStatus('berserk', effect.duration + 1);
-        return `${player.name} enters a berserk state, loses ${healthLoss} HP, `
+        return `${player.name} used ${this.name}. ${player.name} enters a berserk state, loses ${healthLoss} HP, `
           + `and restores MP.`;
       }
       if (effect.type === 'channelAether') {
         player.addStatus('channelAether', effect.duration + 1);
-        return `${player.name} channels aether for ${effect.duration} turns.`;
+        return `${player.name} used ${this.name}. `
+          + `${player.name} channels aether for ${effect.duration} turns.`;
       }
       if (effect.type === 'noHoldsBarred') {
         player.maxHealth = Math.max(1, player.maxHealth - 1);
         player.health = Math.min(player.health, player.maxHealth);
         player.damageBuff = 0;
         const result = player.attackWithResult(target, 0, effect.powerBonus, 'normal');
-        return RPG.formatAttackResult(player, target, result)
-          .replace(`${player.name} attacks`, `${this.name} attacks`)
+        return formatSkillAttack(player, this.name, target, result)
           + ` Max HP permanently reduced by 1.`;
       }
       if (effect.type === 'magicBurst') {
@@ -127,21 +138,40 @@
         const result = player.attackWithResult(
           target, 0, spentMp * effect.powerPerMp, 'normal'
         );
-        if (result.hit && spentMp > 20) target.applyParalysis(effect.stunDuration);
-        return RPG.formatAttackResult(player, target, result)
-          .replace(`${player.name} attacks`, `${this.name} attacks`)
+        if (result.hit && spentMp > 20) target.applyStun(effect.stunDuration);
+        return formatSkillAttack(player, this.name, target, result)
           + (result.hit && spentMp > 20 ? ' The enemy is stunned.' : '');
+      }
+      if (effect.type === 'critBuff') {
+        const recipient = target || player;
+        recipient.addStatus('criticalRush', effect.duration + 1);
+        return `${player.name} raised the parties critical chance by ${effect.percent * 100}%.`;
       }
       if (effect.type === 'execute') {
         player.damageBuff = 0;
         const result = damage();
-        if (!result.hit) return `${this.name} misses.`;
+        if (!result.hit) return formatSkillAttack(player, this.name, target, result);
         if (Math.random() <= effect.chance) {
           target.takeDamage(target.health);
-          return `${this.name} instantly defeats ${target.name}!`;
+          return `${player.name} used ${this.name} on ${target.name}. `
+            + `${target.name} was instantly defeated!`;
         }
-        return RPG.formatAttackResult(player, target, result)
-          .replace(`${player.name} attacks`, `${this.name} attacks`);
+        return formatSkillAttack(player, this.name, target, result);
+      }
+
+      function formatSkillAttack(player, skillName, target, result) {
+        if (!result.hit) {
+          return `${player.name} used ${skillName} on ${target.name}. `
+            + `${target.name} dodged the attack.`;
+        }
+        if (result.prevented) {
+          return `${player.name} used ${skillName} on ${target.name}. `
+            + `${target.name}'s passive blocked the hit completely.`;
+        }
+        const criticalText = result.critical ? ' Critical hit!' : '';
+        return `${player.name} used ${skillName} on ${target.name}. `
+          + `${target.name} took ${result.damage} damage`
+          + RPG.formatEffectiveness(result.effectiveness) + `.${criticalText}`;
       }
       return `${this.name} has no effect.`;
     }
