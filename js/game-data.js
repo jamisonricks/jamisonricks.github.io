@@ -20,13 +20,20 @@ window.GAME_DATA = {
           name: 'Flame Strike',
           mpCost: 5,
           description: 'Strike with fire for heavy damage: your attack power plus 6 before defense.',
-          effect: { type: 'damage', damageType: 'fire', powerBonus: 6 },
+          effect: {
+            type: 'damage',
+            damageType: 'fire',
+            powerBonus: 6
+          },
         },
         {
           name: 'Heal',
           mpCost: 6,
           description: 'Restore up to 10 HP.',
-          effect: { type: 'heal', amount: 10 },
+          effect: {
+            type: 'heal',
+            amount: 10
+          },
         },
       ],
     },
@@ -42,13 +49,24 @@ window.GAME_DATA = {
           name: 'Storm Arrow',
           mpCost: 5,
           description: 'Deal wind damage and damage over time for 3 turns.',
-          effect: { type: 'poison', damageType: 'wind', powerBonus: 2, damage: 3, duration: 3 },
+          effect: {
+            type: 'poison',
+            damageType: 'wind',
+            powerBonus: 2,
+            damage: 3,
+            duration: 3
+          },
         },
         {
           name: 'Paralyzing Shot',
           mpCost: 7,
           description: 'Deal damage and prevent the enemy from attacking next turn.',
-          effect: { type: 'paralyze', damageType: 'normal', powerBonus: 1, duration: 1 },
+          effect: {
+            type: 'paralyze',
+            damageType: 'normal',
+            powerBonus: 1,
+            duration: 1
+          },
         },
       ],
     },
@@ -64,13 +82,19 @@ window.GAME_DATA = {
           name: 'Scan',
           mpCost: 2,
           description: 'Reveal the enemy weakness and resistance.',
-          effect: { type: 'scan' },
+          effect: {
+            type: 'scan'
+          },
         },
         {
           name: 'Water Geyser',
           mpCost: 8,
           description: 'Blast the enemy with a fairly strong water attack.',
-          effect: { type: 'damage', damageType: 'water', powerBonus: 12 },
+          effect: {
+            type: 'damage',
+            damageType: 'water',
+            powerBonus: 12
+          },
         },
       ],
     },
@@ -80,13 +104,22 @@ window.GAME_DATA = {
       name: 'Earth Spike',
       mpCost: 6,
       description: 'Strike the enemy with earth damage.',
-      effect: { type: 'damage', damageType: 'earth', powerBonus: 7 },
+      effect: {
+        type: 'damage',
+        damageType: 'earth',
+        powerBonus: 7
+      },
     },
     {
       name: 'Drain',
       mpCost: 7,
       description: 'Deal normal damage and restore 50% of the damage as HP.',
-      effect: { type: 'lifeSteal', damageType: 'normal', powerBonus: 3, healPercent: 0.5 },
+      effect: {
+        type: 'lifeSteal',
+        damageType: 'normal',
+        powerBonus: 3,
+        healPercent: 0.5
+      },
     },
     {
       name: 'Ember Dart',
@@ -104,25 +137,39 @@ window.GAME_DATA = {
       name: 'Heavy Blow',
       mpCost: 9,
       description: 'Deliver a strong normal-type attack.',
-      effect: { type: 'damage', damageType: 'normal', powerBonus: 15 },
+      effect: {
+        type: 'damage',
+        damageType: 'normal',
+        powerBonus: 15
+      },
     },
     {
       name: 'Sleep',
       mpCost: 8,
       description: 'High chance to put the enemy to sleep for 3 turns.',
-      effect: { type: 'sleep', chance: 0.8, duration: 3 },
+      effect: {
+        type: 'sleep',
+        chance: 0.8,
+        duration: 3
+      },
     },
     {
       name: 'Battle Cry',
       mpCost: 6,
       description: 'Increase attack by 25% for the current fight.',
-      effect: { type: 'attackBuff', percent: 0.25 },
+      effect: {
+        type: 'attackBuff',
+        percent: 0.25
+      },
     },
     {
       name: 'Stone Skin',
       mpCost: 6,
       description: 'Increase defense by 25% for the current fight.',
-      effect: { type: 'defenseBuff', percent: 0.25 },
+      effect: {
+        type: 'defenseBuff',
+        percent: 0.25
+      },
     },
     {
       name: 'Execute',
@@ -171,21 +218,29 @@ window.GAME_DATA = {
       name: 'Health Potion',
       description: 'Restore 12 HP.',
       price: 10,
-      effect: { type: 'heal', amount: 12 },
+      effect: {
+        type: 'heal',
+        amount: 12
+      },
     },
     {
       id: 'mp-potion',
       name: 'MP Potion',
       description: 'Restore 8 MP.',
       price: 10,
-      effect: { type: 'mp', amount: 8 },
+      effect: {
+        type: 'mp',
+        amount: 8
+      },
     },
     {
       id: 'magnifying-glass',
       name: 'Magnifying Glass',
       description: 'Reveal the enemy weakness and resistance in combat.',
       price: 15,
-      effect: { type: 'scan' },
+      effect: {
+        type: 'scan'
+      },
     },
   ],
 };
