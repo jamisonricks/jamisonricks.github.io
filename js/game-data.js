@@ -35,14 +35,15 @@ window.GAME_DATA = {
       maxMp: 20,
       skills: [
         {
-          name: 'Flame Strike',
+          name: 'Whirling Blade',
           rarity: 'starter',
           mpCost: 5,
-          description: 'Strike with fire for heavy damage: your attack power plus 6 before defense.',
+          description: 'Strike all enemies with a normal-type attack.',
           effect: {
             type: 'damage',
-            damageType: 'fire',
-            powerBonus: 6
+            damageType: 'normal',
+            powerBonus: 1,
+            targetMode: 'allEnemies'
           },
         },
         {
@@ -59,7 +60,7 @@ window.GAME_DATA = {
     },
     {
       name: 'Archer',
-      description: 'A ranged fighter who weakens enemies with status effects.',
+      description: 'A ranged fighter who strengthens allies and weakens enemies.',
       health: 26,
       attack: 9,
       defense: 1,
@@ -137,6 +138,17 @@ window.GAME_DATA = {
     },
   ],
   levelUpSkills: [
+    {
+      name: 'Flame Strike',
+      rarity: 'common',
+      mpCost: 5,
+      description: 'Strike with fire for heavy damage: your attack power plus 6 before defense.',
+      effect: {
+        type: 'damage',
+        damageType: 'fire',
+        powerBonus: 6
+      },
+    },
     {
       name: 'Earth Spike',
       rarity: 'common',
