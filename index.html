@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Turn-Based RPG</title>
+    <link href="css/style.css" rel="stylesheet">
+  </head>
+  <body>
+    <div id="game-output">
+      <div id="game-log" aria-live="polite"></div>
+      <div id="game-status" aria-live="polite"></div>
+    </div>
+    <div id="game-input">
+      <button id="start-game">Start Game</button>
+      <div id="class-selection" hidden></div>
+      <div id="combat-actions" hidden>
+        <button id="attack-button">Attack</button>
+        <button id="defend-button">Defend</button>
+        <button id="skill-button">Skill</button>
+        <button id="item-button">Item</button>
+        <button id="combat-stats-button">Stats</button>
+        <div id="skill-list" hidden></div>
+        <div id="combat-item-list" hidden></div>
+        <div id="combat-stats" hidden></div>
+      </div>
+      <div id="level-up" hidden></div>
+      <div id="shop" hidden></div>
+      <div id="preparation" hidden>
+        <button id="inventory-button">Inventory</button>
+        <button id="stats-button">Stats</button>
+        <div id="preparation-panel" hidden></div>
+        <button id="next-combat-button">Next Combat</button>
+      </div>
+    </div>
+    <script type="text/javascript" src="js/game-data.js"></script>
+    <script type="text/javascript" src="js/game-utils.js"></script>
+    <script type="text/javascript" src="js/combatants.js"></script>
+    <script type="text/javascript" src="js/abilities.js"></script>
+    <script type="text/javascript" src="js/main.js"></script>
+  </body>
+</html>
