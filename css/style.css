@@ -180,3 +180,12 @@ button:hover {
 .skill-rarity-legendary:hover {
   background: #df8d2d;
 }
+#version-number {
+  position: fixed;
+  bottom: 10px;
+  right: 12px;
+  font-size: 15px;
+  color: #888;
+  opacity: 0.7;
+  pointer-events: none;
+}
