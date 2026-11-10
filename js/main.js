@@ -1023,12 +1023,12 @@ document.addEventListener('DOMContentLoaded', function () {
       });
       addShopPurchaseButton(
         container,
-        `${classData.name} - 30 gold`,
+        `${classData.name} - 100 gold`,
         alreadyRecruited ? 'Already in your party.' : classData.description,
-        alreadyRecruited || party.length >= 4 || player.gold < 30,
+        alreadyRecruited || party.length >= 4 || player.gold < 100,
         function () {
-          if (alreadyRecruited || party.length >= 4 || player.gold < 30) return;
-          player.gold -= 30;
+          if (alreadyRecruited || party.length >= 4 || player.gold < 100) return;
+          player.gold -= 100;
           const recruit = createPlayer(classData);
           classData.startingItems.forEach(function (itemId) {
             player.addItem(itemId);

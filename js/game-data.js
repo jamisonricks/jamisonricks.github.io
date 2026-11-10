@@ -39,7 +39,7 @@ window.GAME_DATA = {
           name: 'Whirling Blade',
           rarity: 'starter',
           targetType: 'allEnemies',
-          mpCost: 5,
+          mpCost: 12,
           description: 'Strike all enemies with a normal-type attack.',
           effect: {
             type: 'damage',
@@ -80,7 +80,7 @@ window.GAME_DATA = {
           rarity: 'starter',
           targetType: 'enemy',
           mpCost: 5,
-          description: 'Deal weak wind-type damage and deal damage over time for 3 turns.',
+          description: 'Deal weak wind-type damage and afflict the target with Wind Shear for 3 turns.',
           effect: {
             type: 'damageOverTime',
             name: 'Wind Shear',
@@ -95,12 +95,12 @@ window.GAME_DATA = {
           rarity: 'starter',
           targetType: 'allAllies',
           mpCost: 7,
-          description: 'Increase all party members critical chance by 30% for 3 turns.',
+          description: 'Increase all party members critical chance by 25% for 3 turns.',
           effect: {
             type: 'critBuff',
             targetGroup: 'allies',
             duration: 3,
-            percent: 0.3
+            percent: 0.25
           },
         },
       ],
@@ -261,7 +261,7 @@ window.GAME_DATA = {
       name: 'Weaken',
       rarity: 'common',
       targetType: 'enemy',
-      mpCost: 5,
+      mpCost: 6,
       description: 'The enemy deals 25% less damage for 3 turns.',
       effect: {
         type: 'weaken',
@@ -273,7 +273,7 @@ window.GAME_DATA = {
       name: 'Brittle Armor',
       rarity: 'common',
       targetType: 'enemy',
-      mpCost: 5,
+      mpCost: 6,
       description: 'The enemy takes 25% more damage for 3 turns.',
       effect: {
         type: 'brittle',
@@ -296,11 +296,11 @@ window.GAME_DATA = {
       name: 'Berserk',
       rarity: 'rare',
       targetType: 'self',
-      mpCost: 8,
-      description: 'Lose 5% max HP, restore 50% max MP, and deal 25% increased damage for 3 turns.',
+      mpCost: 0,
+      description: 'Lose 25% max HP, restore 50% max MP, and deal 25% increased damage for 3 turns.',
       effect: {
         type: 'berserk',
-        healthPercent: 0.05,
+        healthPercent: 0.25,
         mpPercent: 0.5,
         damagePercent: 0.25,
         duration: 3,
@@ -310,7 +310,7 @@ window.GAME_DATA = {
       name: 'Tidal Wave',
       rarity: 'rare',
       targetType: 'allEnemies',
-      mpCost: 13,
+      mpCost: 15,
       description: 'Summon a massive wave of water, dealing medium water-type damage to all enemies',
       effect: {
         type: 'damage',
@@ -347,7 +347,7 @@ window.GAME_DATA = {
       rarity: 'legendary',
       targetType: 'enemy',
       mpCost: 0,
-      description: 'Spend all MP on a powerful attack. Over 20 MP also stuns the enemy.',
+      description: 'Consume all remaining MP on a devastating attack. Consuming over 20 MP also stuns the enemy.',
       effect: {
         type: 'magicBurst',
         powerPerMp: 2,
@@ -379,8 +379,8 @@ window.GAME_DATA = {
     maxAttackChance: 0.9,
     mpReward: 3,
     xp: 100,
-    goldMin: 8,
-    goldMax: 16,
+    goldMin: 20,
+    goldMax: 30,
   },
   progression: {
     firstLevelXp: 100,
@@ -396,22 +396,22 @@ window.GAME_DATA = {
     {
       id: 'health-potion',
       name: 'Health Potion',
-      description: 'Restore 12 HP.',
+      description: 'Restore 15 HP.',
       price: 10,
       effect: {
         type: 'heal',
-        amount: 12
+        amount: 15
       },
       targetType: 'ally',
     },
     {
       id: 'revival-potion',
       name: 'Revival Potion',
-      description: 'Revive a fallen ally with 25% of their max HP.',
+      description: 'Revive a fallen ally with 50% of their max HP.',
       price: 25,
       effect: {
         type: 'revive',
-        healthPercent: 0.25
+        healthPercent: 0.50
       },
       targetType: 'ally',
     },
@@ -430,7 +430,7 @@ window.GAME_DATA = {
       id: 'magnifying-glass',
       name: 'Magnifying Glass',
       description: 'Reveal the enemy weakness and resistance in combat.',
-      price: 15,
+      price: 5,
       effect: {
         type: 'scan'
       },
