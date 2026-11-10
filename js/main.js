@@ -269,50 +269,22 @@ document.addEventListener('DOMContentLoaded', function () {
   // Controls the visibility of skills, items and stats.
   // --------------------------------------------------
 
-  // Show or hide the available combat skills.
-  function toggleSkillList() {
+  // Show or hide one combat panel, closing the others.
+  function toggleCombatPanel(panel, render) {
     if (gameOver) return;
-
-    elements.skills.hidden = !elements.skills.hidden;
-
-    // Close other combat panels.
-    elements.items.hidden = true;
-    elements.combatStats.hidden = true;
-
-    if (!elements.skills.hidden) {
-      renderSkillList();
-    }
+    const shouldShow = panel.hidden;
+    [elements.skills, elements.items, elements.combatStats].forEach(function (other) {
+      other.hidden = true;
+    });
+    panel.hidden = !shouldShow;
+    if (shouldShow) render();
   }
 
-  // Show or hide the available combat items.
+  function toggleSkillList() { toggleCombatPanel(elements.skills, renderSkillList); }
   function toggleItemList() {
-    if (gameOver) return;
-
-    elements.items.hidden = !elements.items.hidden;
-
-    // Close other combat panels.
-    elements.skills.hidden = true;
-    elements.combatStats.hidden = true;
-
-    if (!elements.items.hidden) {
-      renderItemList(elements.items, true);
-    }
+    toggleCombatPanel(elements.items, function () { renderItemList(elements.items, true); });
   }
-
-  // Show or hide the player's combat statistics.
-  function toggleCombatStats() {
-    if (gameOver) return;
-
-    elements.combatStats.hidden = !elements.combatStats.hidden;
-
-    // Close other combat panels.
-    elements.skills.hidden = true;
-    elements.items.hidden = true;
-
-    if (!elements.combatStats.hidden) {
-      renderCombatStats();
-    }
-  }
+  function toggleCombatStats() { toggleCombatPanel(elements.combatStats, renderCombatStats); }
 
   function renderCombatStats() {
     elements.combatStats.textContent = formatPlayerStats(
@@ -338,7 +310,8 @@ document.addEventListener('DOMContentLoaded', function () {
       // Disable skills the player cannot currently afford or use.
       button.disabled = !party[selectingPartyIndex].canUseSkill(skill);
 
-      button.textContent = `${skill.name} (${party[selectingPartyIndex].getSkillCost(skill)} MP)`;
+      button.textContent = `${skill.name} [${skill.category}] `
+        + `(${party[selectingPartyIndex].getSkillCost(skill)} MP)`;
 
       // Display a description of what the skill does.
       const description = document.createElement('small');
@@ -444,41 +417,32 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     elements.skills.hidden = true;
     elements.items.hidden = true;
-    const targetType = payload && payload.targetType || 'enemy';
-    if (targetType === 'self' || targetType === 'allEnemies' || targetType === 'allAllies') {
-      const targets = targetType === 'self'
-        ? [actor]
-        : targetType === 'allAllies'
-          ? party.filter(function (member) { return member.isAlive(); })
-          : enemies.filter(function (enemy) { return enemy.isAlive(); });
-      selectTarget({ type, payload }, targets);
+    const targetType = payload && payload.targetType || 'single';
+    if (targetType === 'self' || targetType === 'multiTarget') {
+      selectTarget({ type, payload }, getValidTargets(actor, payload));
       return;
     }
     elements.targetList.hidden = false;
     renderTargets(type, payload);
   }
 
+  function getValidTargets(actor, payload) {
+    const effect = payload && payload.effect;
+    const targetType = payload && payload.targetType || 'single';
+    const group = payload && payload.targetGroup === 'ally' ? party : enemies;
+    if (effect && effect.type === 'revive') {
+      return party.filter(function (member) { return !member.isAlive(); });
+    }
+    if (targetType === 'self') return [actor];
+    return group.filter(function (member) { return member.isAlive(); });
+  }
+
   function renderTargets(type, payload) {
     elements.targetList.replaceChildren();
-    const actor = party[selectingPartyIndex];
-    const effect = payload && payload.effect;
-    const allies = party.filter(function (member) { return member.isAlive(); });
-    const fallenAllies = party.filter(function (member) { return !member.isAlive(); });
-    const targetType = payload && payload.targetType || 'enemy';
-    const targets = effect && effect.type === 'revive' ? fallenAllies
-      : targetType === 'enemy'
-      ? enemies.filter(function (target) { return target.isAlive(); })
-      : targetType === 'ally' ? allies
-        : targetType === 'self' ? [actor]
-          : targetType === 'allEnemies'
-            ? enemies.filter(function (target) { return target.isAlive(); })
-            : targetType === 'allAllies' ? allies : fallenAllies;
-    const allTargets = targetType === 'allEnemies'
-      ? enemies.filter(function (target) { return target.isAlive(); })
-      : targetType === 'allAllies' ? allies : null;
-    if (allTargets) {
-      addTargetButton(`${payload ? payload.name : type} (all valid targets)`, function () {
-        selectTarget({ type, payload }, allTargets);
+    const targets = getValidTargets(party[selectingPartyIndex], payload);
+    if (payload && payload.targetType === 'multiTarget') {
+      addTargetButton(`${payload.name} (all valid targets)`, function () {
+        selectTarget({ type, payload }, targets);
       });
       return;
     }
@@ -578,18 +542,28 @@ document.addEventListener('DOMContentLoaded', function () {
     const actors = party.concat(enemies).filter(function (combatant) {
       return combatant.isAlive();
     }).sort(function (left, right) {
-      return right.speed - left.speed;
+      return right.getSpeed() - left.getSpeed();
     });
     actors.forEach(function (actor) {
       if (!actor.isAlive()) return;
       if (party.includes(actor)) {
-        const index = party.indexOf(actor);
-        const action = pendingActions[index];
-        if (!action) return;
-        if (actor.preparePassive()) {
-          messages.push('Deadeye is ready: the next attack is guaranteed to hit and critically hit.');
+        if (actor.isIncapacitated()) {
+          messages.push(`${actor.name} is ${actor.hasActiveEffect('sleep') ? 'asleep' : 'stunned'} `
+            + 'and cannot act.');
+        } else {
+          const index = party.indexOf(actor);
+          const action = pendingActions[index];
+          if (action) {
+            if (actor.preparePassive()) {
+              messages.push('Deadeye is ready: the next attack is guaranteed to hit and critically hit.');
+            }
+            messages.push(executeAction(action));
+          }
         }
-        messages.push(executeAction(action));
+        if (actor.isAlive()) {
+          messages.push(...actor.processTurnEffects());
+          if (actor.isAlive()) actor.processEndOfTurnEffects();
+        }
       } else {
         const target = party.filter(function (member) { return member.isAlive(); })
           [RPG.getRandomInt(Math.max(1, party.filter(function (member) {
@@ -608,7 +582,7 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
     party.forEach(function (member) {
-      if (member.isAlive()) member.endTurn();
+      member.isDefending = false;
     });
 
     // Display all messages generated during the turn.
@@ -619,10 +593,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function executeAction(action) {
     const actor = action.actor;
-    if (actor.incapacitatedTurns > 0) {
-      actor.incapacitatedTurns -= 1;
-      return `${actor.name} is incapable and loses this turn.`;
-    }
     if (action.type === 'defend') {
       actor.damageBuff = 0;
       actor.defend();
@@ -633,7 +603,8 @@ document.addEventListener('DOMContentLoaded', function () {
       const result = actor.attackWithResult(target, 0, actor.damageBuff, 'normal',
         actor.consumeGuaranteedAttack());
       actor.damageBuff = 0;
-      if (actor.passiveType === 'Mage') actor.recoverMp(2);
+      actor.recoverMp(gameData.progression.basicAttackMpRecovery
+        + (actor.passiveType === 'Mage' ? 2 : 0));
       return RPG.formatAttackResult(actor, target, result);
     }
     if (action.type === 'item') {
@@ -652,6 +623,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function handleEnemyDefeat(messages) {
     const encounter = gameData.encounter;
+    party.forEach(function (member) {
+      member.clearActiveEffects();
+    });
 
     // Increase the player's defeat counter.
     defeatedEnemies += 1;
@@ -671,7 +645,6 @@ document.addEventListener('DOMContentLoaded', function () {
       const memberXp = wasDefeated ? Math.floor(xpReward / 2) : xpReward;
       member.xp += memberXp;
       member.totalXp += memberXp;
-      member.recoverMp(encounter.mpReward);
       if (wasDefeated) {
         messages.push(`${member.name} revives with 1 HP and receives half XP.`);
       }
@@ -743,7 +716,7 @@ document.addEventListener('DOMContentLoaded', function () {
       // Display the skill description and MP cost.
       const description = document.createElement('small');
       description.textContent = `${definition.description} (${definition.mpCost} MP) `
-        + `[${definition.rarity}]`;
+        + `[${definition.category}] [${definition.rarity}]`;
       button.appendChild(description);
 
       // Add the selected skill to the player's skill list.
@@ -988,7 +961,8 @@ document.addEventListener('DOMContentLoaded', function () {
       addShopPurchaseButton(
         container,
         `${definition.name} - ${cost} gold`,
-        `${definition.description} (${definition.mpCost} MP) [${definition.rarity}]`,
+        `${definition.description} (${definition.mpCost} MP) `
+          + `[${definition.category}] [${definition.rarity}]`,
         player.gold < cost,
         function () {
           if (player.gold < cost) return;
@@ -1108,7 +1082,8 @@ document.addEventListener('DOMContentLoaded', function () {
       member.skills.forEach(function (skill) {
         const skillEntry = document.createElement('p');
         skillEntry.classList.add(`skill-rarity-${skill.rarity}`);
-        skillEntry.textContent = `${skill.name} [${skill.rarity}] - ${skill.description}`;
+        skillEntry.textContent = `${skill.name} [${skill.category}] [${skill.rarity}] `
+          + `- ${skill.description}`;
         elements.preparationPanel.appendChild(skillEntry);
       });
     });
@@ -1128,13 +1103,10 @@ document.addEventListener('DOMContentLoaded', function () {
       + `| Weapon Lv ${subject.weaponLevel} | Defense ${subject.defense} `
       + `| Armor Lv ${subject.armorLevel} | Total XP ${subject.totalXp} `
       + `| XP to next level ${subject.xp}/${subject.xpNeeded()} `
-      + `| Dexterity ${subject.dexterity} | Agility ${subject.agility} `
-      + `| Speed ${subject.speed} | Crit ${Math.round(subject.critChance * 100)}%`;
-  }
-
-  // Generate the complete combat status line.
-  function formatStatus() {
-    return `Score: ${defeatedEnemies} | Gold: ${player.gold}`;
+      + `| Dexterity ${subject.getDexterity()} | Agility ${subject.getAgility()} `
+      + `| Speed ${subject.getSpeed()} | Crit ${Math.round(
+        (subject.critChance + subject.critChanceBonus) * 100
+      )}% | Effects ${subject.getActiveEffectSummary() || 'None'}`;
   }
 
 
@@ -1146,6 +1118,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function finishGame(messages) {
     gameOver = true;
+    party.forEach(function (member) {
+      member.clearActiveEffects();
+    });
 
     // Add the final score and restart instructions.
     messages.push(
@@ -1240,7 +1215,7 @@ document.addEventListener('DOMContentLoaded', function () {
     enemies.forEach(function (enemy) {
       const combatant = document.createElement('div');
       combatant.className = `battlefield-combatant${enemy.isAlive() ? '' : ' defeated'}`;
-      combatant.title = enemy.name;
+      combatant.title = [enemy.name, enemy.getActiveEffectSummary()].filter(Boolean).join(' - ');
       const icon = document.createElement('span');
       icon.className = 'battlefield-icon';
       icon.textContent = 'x';
@@ -1255,7 +1230,7 @@ document.addEventListener('DOMContentLoaded', function () {
     party.forEach(function (member) {
       const combatant = document.createElement('div');
       combatant.className = `battlefield-combatant${member.isAlive() ? '' : ' defeated'}`;
-      combatant.title = member.name;
+      combatant.title = [member.name, member.getActiveEffectSummary()].filter(Boolean).join(' - ');
       const icon = document.createElement('span');
       icon.className = 'battlefield-icon';
       icon.textContent = member.icon;
@@ -1290,7 +1265,9 @@ document.addEventListener('DOMContentLoaded', function () {
       quadrant.className = 'status-quadrant';
       quadrant.textContent = `${member.className} Lv ${member.level} `
         + `HP ${member.health}/${member.maxHealth} `
-        + `MP ${member.mp}/${member.maxMp}`;
+        + `MP ${member.mp}/${member.maxMp}`
+        + (member.getActiveEffectSummary()
+          ? ` | Effects: ${member.getActiveEffectSummary()}` : '');
       elements.gameStatus.appendChild(quadrant);
     });
     const summary = document.createElement('div');

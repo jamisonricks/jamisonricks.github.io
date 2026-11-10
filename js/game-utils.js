@@ -6,15 +6,6 @@
     return Math.floor(Math.random() * max);
   };
 
-  window.RPG.shuffle = function (values) {
-    const shuffled = values.slice();
-    for (let index = shuffled.length - 1; index > 0; index -= 1) {
-      const swapIndex = window.RPG.getRandomInt(index + 1);
-      [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
-    }
-    return shuffled;
-  };
-
   window.RPG.formatEffectiveness = function (effectiveness) {
     if (effectiveness === 'weak') {
       return ' (weakness exploited)';

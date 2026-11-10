@@ -18,8 +18,16 @@
       this.outgoingDamageMultiplier = 1;
       this.incomingDamageMultiplier = 1;
       this.chargeMultiplier = 1;
-      this.statuses = {};
-      this.damageOverTimeEffects = {};
+      this.activeEffects = [];
+      this.nextEffectInstanceId = 1;
+      this.attackPowerPercent = 0;
+      this.defensePercent = 0;
+      this.healthRegenerationPercent = 0;
+      this.manaRegenerationPercent = 0;
+      this.spellCostReduction = 0;
+      this.speedPercent = 0;
+      this.agilityPercent = 0;
+      this.dexterityPercent = 0;
     }
 
     isAlive() {
@@ -32,10 +40,6 @@
       return damage;
     }
 
-    takeDamageByType(amount, damageType) {
-      return this.getDamageResult(amount, damageType).damage;
-    }
-
     getDamageResult(amount, damageType, applyDamage = true) {
       if (applyDamage && this.preventNextHit) {
         this.preventNextHit = false;
@@ -43,13 +47,13 @@
       }
       const isWeak = (this.weaknesses || []).includes(damageType);
       const isResisted = this.resistance === damageType;
-      const isWaking = this.sleepTurns > 0;
+      const isWaking = this.hasActiveEffect('sleep');
       const multiplier = (isWeak
         ? gameData.damageTypes[damageType].multiplier
         : isResisted ? gameData.resistanceMultiplier : 1) * (isWaking ? 1.2 : 1)
         * this.incomingDamageMultiplier;
       if (isWaking && applyDamage) {
-        this.sleepTurns = 0;
+        this.removeActiveEffect('sleep');
       }
       const reducedDamage = this.isDefending && amount > 0
         ? Math.max(1, Math.floor(amount * multiplier * 0.8))
@@ -87,59 +91,175 @@
         damage * attackMultiplier * chargedMultiplier * this.outgoingDamageMultiplier,
         damageType
       );
-      if (result.hit !== false && result.damage > 0) this.chargeMultiplier = 1;
+      if (result.hit !== false && result.damage > 0) this.removeConsumedEffects();
       return Object.assign(result, { hit: true, critical });
     }
 
     getHitChance(target) {
       return Math.max(0.1, Math.min(0.95,
-        0.75 + (this.dexterity - target.agility) * 0.03));
+        0.75 + (this.getDexterity() - target.getAgility()) * 0.03));
     }
 
     getAttackPower() {
-      return this.attackPower;
+      return Math.floor(this.attackPower * (1 + this.attackPowerPercent));
     }
 
     getDefense() {
-      return this.defense;
+      return Math.floor(this.defense * (1 + this.defensePercent));
     }
 
-    addStatus(name, duration, sourceId = name) {
-      if (!this.statuses[name]) this.statuses[name] = {};
-      this.statuses[name][sourceId] = Math.max(
-        this.statuses[name][sourceId] || 0,
-        duration
-      );
+    applyStatusEffect(effectId, sourceId, options = {}) {
+      const definition = gameData.statusEffects[effectId];
+      if (!definition) throw new Error(`Unknown status effect: ${effectId}`);
+      if (definition.chance !== undefined && Math.random() > definition.chance) return false;
+
+      const durationOffset = options.durationOffset || 0;
+      const remainingDuration = definition.duration === null
+        ? null : definition.duration + durationOffset;
+      const existing = definition.stacking === 'stack' ? null
+        : this.activeEffects.find(function (instance) {
+          return instance.effectId === effectId && instance.sourceId === sourceId;
+        });
+      if (existing) {
+        if (remainingDuration !== null) {
+          existing.remainingDuration = Math.max(existing.remainingDuration, remainingDuration);
+          existing.durationOffset = Math.max(existing.durationOffset, durationOffset);
+        }
+        existing.data = Object.assign(existing.data, options.data || {});
+      } else {
+        this.activeEffects.push({
+          instanceId: this.nextEffectInstanceId,
+          effectId,
+          sourceId,
+          remainingDuration,
+          durationOffset,
+          data: Object.assign({}, options.data),
+        });
+        this.nextEffectInstanceId += 1;
+      }
+      this.refreshStatusEffects();
+      return true;
+    }
+
+    hasActiveEffect(effectId) {
+      return this.activeEffects.some(function (instance) {
+        return instance.effectId === effectId;
+      });
+    }
+
+    removeActiveEffect(effectId, sourceId) {
+      this.activeEffects = this.activeEffects.filter(function (instance) {
+        return instance.effectId !== effectId
+          || (sourceId !== undefined && instance.sourceId !== sourceId);
+      });
       this.refreshStatusEffects();
     }
 
-    hasStatus(name) {
-      return Boolean(this.statuses[name]
-        && Object.keys(this.statuses[name]).some(function (source) {
-          return this.statuses[name][source] > 0;
-        }, this));
+    removeConsumedEffects() {
+      this.activeEffects = this.activeEffects.filter(function (instance) {
+        return !gameData.statusEffects[instance.effectId].consumeOnSuccessfulHit;
+      });
+      this.refreshStatusEffects();
     }
 
-    tickStatuses() {
-      Object.keys(this.statuses).forEach(function (name) {
-        Object.keys(this.statuses[name]).forEach(function (sourceId) {
-          this.statuses[name][sourceId] -= 1;
-          if (this.statuses[name][sourceId] <= 0) {
-            delete this.statuses[name][sourceId];
-          }
-        }, this);
-        if (!Object.keys(this.statuses[name]).length) delete this.statuses[name];
+    processTurnEffects() {
+      const messages = [];
+      this.activeEffects.slice().forEach(function (instance) {
+        if (!this.isAlive()) return;
+        const definition = gameData.statusEffects[instance.effectId];
+        if (definition.category !== 'damageOverTime') return;
+        const result = this.getDamageResult(definition.damage, definition.damageType);
+        messages.push(`${this.name} took ${result.damage} damage from ${definition.name}`
+          + RPG.formatEffectiveness(result.effectiveness) + '.');
       }, this);
+      return messages;
+    }
+
+    applyRegenerationEffects() {
+      if (this.healthRegenerationPercent) {
+        this.heal(this.maxHealth * this.healthRegenerationPercent);
+      }
+      if (this.manaRegenerationPercent && this.recoverMp) {
+        this.recoverMp(this.maxMp * this.manaRegenerationPercent);
+      }
+    }
+
+    processEndOfTurnEffects() {
+      this.tickActiveEffects();
+      this.applyRegenerationEffects();
+    }
+
+    tickActiveEffects() {
+      this.activeEffects.forEach(function (instance) {
+        if (instance.remainingDuration === null) return;
+        instance.remainingDuration -= 1;
+        instance.durationOffset = 0;
+      });
+      this.activeEffects = this.activeEffects.filter(function (instance) {
+        return instance.remainingDuration === null || instance.remainingDuration > 0;
+      });
       this.refreshStatusEffects();
+    }
+
+    clearActiveEffects() {
+      this.activeEffects = [];
+      this.refreshStatusEffects();
+    }
+
+    isIncapacitated() {
+      return this.hasActiveEffect('sleep') || this.hasActiveEffect('stun');
+    }
+
+    getActiveEffectSummary() {
+      return this.activeEffects.map(function (instance) {
+        const definition = gameData.statusEffects[instance.effectId];
+        let duration = 'until combat ends';
+        if (definition.consumeOnSuccessfulHit) {
+          duration = 'until next successful hit';
+        } else if (instance.remainingDuration !== null) {
+          duration = `${Math.max(0, instance.remainingDuration - instance.durationOffset)} turns`;
+        }
+        return `${definition.name} (${duration})`;
+      }).join(', ');
     }
 
     refreshStatusEffects() {
-      this.outgoingDamageMultiplier = this.hasStatus('weaken') ? 0.75 : 1;
-      this.incomingDamageMultiplier = this.hasStatus('brittle') ? 1.25 : 1;
-      this.spellCostReduction = this.hasStatus('channelAether') ? 3 : 0;
-      this.regenerationPercent = this.hasStatus('channelAether') ? 0.05 : 0;
-      this.critChanceBonus = this.hasStatus('criticalRush') ? 0.3 : 0;
+      const values = {
+        outgoingDamageMultiplier: 1,
+        incomingDamageMultiplier: 1,
+        chargeMultiplier: 1,
+        attackPowerPercent: 0,
+        defensePercent: 0,
+        healthRegenerationPercent: 0,
+        manaRegenerationPercent: 0,
+        spellCostReduction: 0,
+        critChanceBonus: 0,
+        speedPercent: 0,
+        agilityPercent: 0,
+        dexterityPercent: 0,
+      };
+      const appliedEffectIds = new Set();
+      this.activeEffects.forEach(function (instance) {
+        const definition = gameData.statusEffects[instance.effectId];
+        if (definition.stacking !== 'stack' && appliedEffectIds.has(instance.effectId)) return;
+        appliedEffectIds.add(instance.effectId);
+        Object.keys(definition.modifiers || {}).forEach(function (key) {
+          const value = definition.modifiers[key];
+          if (key === 'outgoingDamageMultiplier' || key === 'incomingDamageMultiplier') {
+            values[key] *= value;
+          } else if (key === 'chargeMultiplier') {
+            values[key] = Math.max(values[key], value);
+          } else if (Object.prototype.hasOwnProperty.call(values, key)) {
+            values[key] += value;
+          }
+        });
+      });
+      Object.assign(this, values);
     }
+
+    getSpeed() { return Math.floor(this.speed * (1 + this.speedPercent)); }
+    getAgility() { return Math.floor(this.agility * (1 + this.agilityPercent)); }
+    getDexterity() { return Math.floor(this.dexterity * (1 + this.dexterityPercent)); }
   }
 
   class Player extends Combatant {
@@ -153,14 +273,11 @@
       this.isDefending = false;
       this.skills = [];
       this.damageBuff = 0;
-      this.incapacitatedTurns = 0;
       this.level = 1;
       this.xp = 0;
       this.totalXp = 0;
       this.gold = 0;
       this.inventory = {};
-      this.attackBuff = 0;
-      this.defenseBuff = 0;
       this.weaponLevel = 0;
       this.armorLevel = 0;
       this.passive = classData.passive;
@@ -174,7 +291,9 @@
 
     addSkill(skill) { this.skills.push(skill); }
     getSkillCost(skill) {
-      if (skill.effect.type === 'noHoldsBarred' && this.maxHealth <= 1) return Infinity;
+      if (skill.additionalEffects.some(function (effect) {
+        return effect.type === 'maxHealthReduction';
+      }) && this.maxHealth <= 1) return Infinity;
       return Math.max(0, skill.mpCost - (this.spellCostReduction || 0));
     }
     canUseSkill(skill) { return this.mp >= this.getSkillCost(skill); }
@@ -210,20 +329,18 @@
       const growth = gameData.progression.statGrowth;
       this.level += 1;
       this.maxHealth += growth.health;
-      this.health += growth.health;
       this.attackPower += growth.attack;
       this.defense += growth.defense;
       this.maxMp += growth.maxMp;
-      this.mp += growth.maxMp;
+      this.health = this.maxHealth;
+      this.mp = this.maxMp;
     }
     getAttackPower() {
-      const berserkBonus = this.hasStatus('berserk') ? 0.25 : 0;
-      return Math.floor(this.attackPower * (1 + this.attackBuff + berserkBonus));
+      return Math.floor(this.attackPower * (1 + this.attackPowerPercent));
     }
-    getDefense() { return Math.floor(this.defense * (1 + this.defenseBuff)); }
+    getDefense() { return Math.floor(this.defense * (1 + this.defensePercent)); }
     resetCombatBuffs() {
-      this.attackBuff = 0;
-      this.defenseBuff = 0;
+      this.clearActiveEffects();
       this.preventNextHit = this.passiveType === 'Knight';
       this.guaranteedAttackReady = false;
       this.passiveTurns = this.passiveType === 'Archer' ? RPG.getRandomInt(3) + 2 : 0;
@@ -242,11 +359,6 @@
       return ready;
     }
     defend() { this.isDefending = true; }
-    endTurn() {
-      this.isDefending = false;
-      this.tickStatuses();
-      if (this.regenerationPercent) this.heal(this.maxHealth * this.regenerationPercent);
-    }
   }
 
   class Enemy extends Combatant {
@@ -256,44 +368,15 @@
       this.attackChance = attackChance;
       this.weaknesses = weaknesses;
       this.resistance = resistance;
-      this.stunnedTurns = 0;
-      this.sleepTurns = 0;
-      this.dotTurns = 0;
-      this.dotDamage = 0;
-      this.dotDamageType = 'normal';
     }
-    applyStun(duration) {
-      this.stunnedTurns = Math.max(this.stunnedTurns, duration);
-    }
-    applyDamageOverTime(name, damage, duration, damageType, sourceId = name) {
-      const existing = this.damageOverTimeEffects[sourceId];
-      this.damageOverTimeEffects[sourceId] = {
-        name,
-        damage: existing ? Math.max(existing.damage, damage) : damage,
-        duration: Math.max(existing ? existing.duration : 0, duration),
-        damageType,
-      };
-    }
-    applySleep(duration) { this.sleepTurns = Math.max(this.sleepTurns, duration); }
     takeTurn(target) {
       const messages = [];
-      Object.keys(this.damageOverTimeEffects).forEach(function (sourceId) {
-        if (!this.isAlive()) return;
-        const dot = this.damageOverTimeEffects[sourceId];
-        const result = this.getDamageResult(dot.damage, dot.damageType);
-        messages.push(`${this.name} took ${result.damage} damage from ${dot.name}`
-          + RPG.formatEffectiveness(result.effectiveness) + '.');
-        dot.duration -= 1;
-        if (dot.duration <= 0) delete this.damageOverTimeEffects[sourceId];
-      }, this);
       if (!this.isAlive()) return this.finishTurn(messages, false);
-      if (this.sleepTurns > 0) {
-        this.sleepTurns -= 1;
+      if (this.hasActiveEffect('sleep')) {
         messages.push(`${this.name} is asleep and cannot act.`);
         return this.finishTurn(messages, false);
       }
-      if (this.stunnedTurns > 0) {
-        this.stunnedTurns -= 1;
+      if (this.hasActiveEffect('stun')) {
         messages.push(`${this.name} is stunned and cannot act.`);
         return this.finishTurn(messages, false);
       }
@@ -306,7 +389,8 @@
       return this.finishTurn(messages, true);
     }
     finishTurn(messages, attacked) {
-      this.tickStatuses();
+      messages.push(...this.processTurnEffects());
+      this.processEndOfTurnEffects();
       return { messages, attacked };
     }
   }
