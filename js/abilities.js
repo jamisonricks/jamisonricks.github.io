@@ -59,18 +59,26 @@
     }
 
     use(player, target) {
-      if (Array.isArray(target)) {
+      const isMultiTarget = this.targetType === 'allEnemies'
+        || this.targetType === 'allAllies';
+      if (Array.isArray(target) && isMultiTarget) {
         if (this.effect.type === 'critBuff') {
           target.forEach(function (recipient) {
             recipient.addStatus('criticalRush', this.effect.duration + 1, this.name);
           }, this);
-          return `${player.name} raised the parties critical chance by `
+          return `${player.name} used ${this.name} on all allies. `
+            + `${player.name} raised the parties critical chance by `
             + `${this.effect.percent * 100}%.`;
         }
-        return target.map(function (singleTarget) {
-          return this.use(player, singleTarget);
-        }, this).join(' ');
+        const groupName = this.targetType === 'allAllies' ? 'all allies' : 'all enemies';
+        const header = `${player.name} used ${this.name} on ${groupName}.`;
+        const details = target.map(function (singleTarget) {
+          return this.use(player, singleTarget)
+            .replace(`${player.name} used ${this.name} on ${singleTarget.name}. `, '');
+        }, this);
+        return `${header} ${details.join(' ')}`;
       }
+      if (Array.isArray(target)) target = target[0];
       const effect = this.effect;
       const damageBonus = player.damageBuff;
       const damage = function () {

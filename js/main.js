@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', function () {
   let levelUpQueue = [];
   let items;
   let defeatedEnemies = 0;
+  let additionalXpBonusPercent = 0;
   let gameOver = false;
   let inCombat = false;
 
@@ -165,6 +166,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Reset the game progress.
     defeatedEnemies = 0;
+    additionalXpBonusPercent = 0;
     gameOver = false;
     elements.share.hidden = true;
 
@@ -660,10 +662,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Award the player their rewards.
     player.gold += gold;
+    const enemyCountBonusPercent = Math.max(0, enemies.length - 1) * 20;
+    const xpBonusPercent = enemyCountBonusPercent + additionalXpBonusPercent;
+    const xpReward = Math.floor(encounter.xp * (1 + xpBonusPercent / 100));
     party.forEach(function (member) {
       const wasDefeated = !member.isAlive();
       if (wasDefeated) member.health = 1;
-      member.xp += wasDefeated ? Math.floor(encounter.xp / 2) : encounter.xp;
+      const memberXp = wasDefeated ? Math.floor(xpReward / 2) : xpReward;
+      member.xp += memberXp;
+      member.totalXp += memberXp;
       member.recoverMp(encounter.mpReward);
       if (wasDefeated) {
         messages.push(`${member.name} revives with 1 HP and receives half XP.`);
@@ -672,7 +679,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Add reward information to the combat log.
     messages.push(`${enemies.length} enemies are defeated! Score: ${defeatedEnemies}.`);
-    messages.push(`You gained ${encounter.xp} XP and ${gold} gold.`);
+    messages.push(`You gained ${xpReward} XP (+${xpBonusPercent}%) total and ${gold} gold.`);
 
     // Hide the combat interface while the player progresses.
     elements.combat.hidden = true;
@@ -831,7 +838,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function chooseLevelUpSkills(pool, count) {
-    const weights = { common: 80, rare: 18, legendary: 2 };
+    const weights = { common: 75, rare: 20, legendary: 5 };
     const choices = [];
     const remaining = pool.slice();
     while (choices.length < count && remaining.length) {
@@ -1119,7 +1126,8 @@ document.addEventListener('DOMContentLoaded', function () {
     return `Level ${subject.level} ${subject.className} | HP ${subject.health}/${subject.maxHealth} `
       + `| MP ${subject.mp}/${subject.maxMp} | Attack ${subject.attackPower} `
       + `| Weapon Lv ${subject.weaponLevel} | Defense ${subject.defense} `
-      + `| Armor Lv ${subject.armorLevel} | XP ${subject.xp}/${subject.xpNeeded()} `
+      + `| Armor Lv ${subject.armorLevel} | Total XP ${subject.totalXp} `
+      + `| XP to next level ${subject.xp}/${subject.xpNeeded()} `
       + `| Dexterity ${subject.dexterity} | Agility ${subject.agility} `
       + `| Speed ${subject.speed} | Crit ${Math.round(subject.critChance * 100)}%`;
   }

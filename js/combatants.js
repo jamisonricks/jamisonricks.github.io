@@ -51,9 +51,11 @@
       if (isWaking && applyDamage) {
         this.sleepTurns = 0;
       }
+      const reducedDamage = this.isDefending && amount > 0
+        ? Math.max(1, Math.floor(amount * multiplier * 0.8))
+        : Math.floor(amount * multiplier);
       return {
-        damage: applyDamage ? this.takeDamage(Math.floor(amount * multiplier))
-          : Math.floor(amount * multiplier),
+        damage: applyDamage ? this.takeDamage(reducedDamage) : reducedDamage,
         effectiveness: isWaking ? 'sleep' : isWeak ? 'weak' : isResisted ? 'resisted' : 'normal',
       };
     }
@@ -154,6 +156,7 @@
       this.incapacitatedTurns = 0;
       this.level = 1;
       this.xp = 0;
+      this.totalXp = 0;
       this.gold = 0;
       this.inventory = {};
       this.attackBuff = 0;
