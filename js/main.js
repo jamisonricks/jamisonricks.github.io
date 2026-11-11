@@ -18,12 +18,14 @@ document.addEventListener('DOMContentLoaded', function () {
     targetList: document.getElementById('target-list'),
     partyTurnList: document.getElementById('party-turn-list'),
     levelUp: document.getElementById('level-up'),
+    artifactChest: document.getElementById('artifact-chest'),
     shop: document.getElementById('shop'),
     preparation: document.getElementById('preparation'),
     preparationPanel: document.getElementById('preparation-panel'),
     preparationButtons: [
       document.getElementById('inventory-button'),
       document.getElementById('skills-button'),
+      document.getElementById('artifacts-button'),
       document.getElementById('stats-button')
     ],
     share: document.getElementById('share-button')
@@ -39,6 +41,7 @@ document.addEventListener('DOMContentLoaded', function () {
   let levelUpQueue = [];
   let items;
   let defeatedEnemies = 0;
+  let previousBossId = null;
   let additionalXpBonusPercent = 0;
   let gameOver = false;
   let inCombat = false;
@@ -79,6 +82,9 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   document.getElementById('skills-button').addEventListener('click', function () {
     renderPreparationPanel('skills');
+  });
+  document.getElementById('artifacts-button').addEventListener('click', function () {
+    renderPreparationPanel('artifacts');
   });
   document.getElementById('shop-button').addEventListener('click', function () {
     showShop(['Welcome back to the shop.']);
@@ -166,6 +172,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Reset the game progress.
     defeatedEnemies = 0;
+    previousBossId = null;
     additionalXpBonusPercent = 0;
     gameOver = false;
     elements.share.hidden = true;
@@ -174,8 +181,8 @@ document.addEventListener('DOMContentLoaded', function () {
     elements.classSelection.hidden = true;
     elements.combat.hidden = false;
 
-    // Create the first enemy without rendering an intermediate message.
-    createEnemy();
+    // Create the first boss without rendering an intermediate message.
+    createEncounter();
     inCombat = true;
     pendingActions = [];
     selectingPartyIndex = 0;
@@ -184,7 +191,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Display the opening game messages once.
     renderOutput([
       `${party.map(function (member) { return member.className; }).join(' and ')} enter the fight!`,
-      `${enemies.length} enem${enemies.length === 1 ? 'y' : 'ies'} appear!`,
+      `${enemies[0].name} appears!`,
       '',
       'Choose an action to begin the fight.'
     ]);
@@ -192,58 +199,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
   // --------------------------------------------------
-  // ENEMY GENERATION
-  // Creates enemies that become stronger as the player
-  // defeats more opponents.
+  // BOSS ENCOUNTERS
+  // Select a different boss each encounter, scaling with each victory.
   // --------------------------------------------------
 
-  function createEnemy() {
+  function createEncounter() {
     party.forEach(function (member) {
       member.resetCombatBuffs();
     });
 
-    const level = defeatedEnemies;
-    const encounter = gameData.encounter;
-
-    // Calculate enemy health based on progression and randomness.
-    // Increase enemy attack chance as the game progresses.
-    const attackChance = Math.min(
-      encounter.maxAttackChance,
-      encounter.baseAttackChance
-        + level * encounter.attackChancePerDefeat
-        + Math.random() * encounter.attackChanceRandomness
-    );
-    // Get all available damage types.
-    const damageTypes = Object.keys(gameData.damageTypes);
-
-    const enemyCount = level === 0 ? 1 : RPG.getRandomInt(5) + 1;
-    enemies = [];
-    for (let index = 0; index < enemyCount; index += 1) {
-      const health = Math.max(1, Math.floor((
-        encounter.baseHealth + level * encounter.healthPerDefeat
-        + RPG.getRandomInt(encounter.healthRandomness)) / enemyCount));
-      const attack = Math.max(1, Math.floor((
-        encounter.baseAttack + level * encounter.attackPerDefeat
-        + RPG.getRandomInt(encounter.attackRandomness)) / Math.sqrt(enemyCount)));
-      const defense = encounter.baseDefense
-        + Math.floor(level * encounter.defensePerDefeat)
-        + RPG.getRandomInt(encounter.defenseRandomness);
-      const dexterity = encounter.baseDexterity + RPG.getRandomInt(encounter.dexterityRandomness);
-      const agility = encounter.baseAgility + RPG.getRandomInt(encounter.agilityRandomness);
-      const critChance = encounter.baseCritChance
-        + Math.random() * encounter.critChanceRandomness;
-      const speed = encounter.baseSpeed + RPG.getRandomInt(encounter.speedRandomness);
-      const weakness = damageTypes[RPG.getRandomInt(damageTypes.length)];
-      const elementalTypes = damageTypes.filter(function (damageType) {
-        return damageType !== 'normal' && damageType !== weakness;
-      });
-      const resistance = Math.random() < 0.5
-        ? elementalTypes[RPG.getRandomInt(elementalTypes.length)] : null;
-      enemies.push(new RPG.Enemy(
-        `Enemy ${level + 1}-${index + 1}`, health, attack, defense, attackChance,
-        [weakness], resistance, dexterity, agility, critChance, speed
-      ));
-    }
+    const boss = RPG.createBoss(defeatedEnemies, previousBossId);
+    previousBossId = boss.id;
+    enemies = [boss];
   }
 
   // Start the next encounter after preparation is complete.
@@ -251,15 +218,15 @@ document.addEventListener('DOMContentLoaded', function () {
     elements.preparation.hidden = true;
     elements.combat.hidden = false;
 
-    createEnemy();
+    createEncounter();
     inCombat = true;
 
     renderOutput([
-      `${enemies.length} enem${enemies.length === 1 ? 'y' : 'ies'} appear!`,
+      `${enemies[0].name} appears!`,
       'Choose an action.'
     ]);
     pendingActions = [];
-    selectingPartyIndex = 0;
+    selectingPartyIndex = party.findIndex(function (member) { return member.isAlive(); });
     renderPartyTurnList();
   }
 
@@ -315,7 +282,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
       // Display a description of what the skill does.
       const description = document.createElement('small');
-      description.textContent = skill.getDescription(party[selectingPartyIndex], enemies[0]);
+      const livingEnemies = enemies.filter(function (enemy) { return enemy.isAlive(); });
+      description.textContent = skill.getDescription(
+        party[selectingPartyIndex], livingEnemies[0], livingEnemies.length
+      );
       button.appendChild(description);
 
       // Use the selected skill and process the combat turn.
@@ -501,6 +471,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function renderPartyTurnList() {
     elements.partyTurnList.replaceChildren();
+    const boss = enemies[0];
+    if (boss && boss.getExecutionWarning && boss.getExecutionWarning()) {
+      const warning = document.createElement('p');
+      warning.textContent = boss.getExecutionWarning();
+      elements.partyTurnList.appendChild(warning);
+    }
     party.forEach(function (member, index) {
       if (!member.isAlive()) return;
       const button = document.createElement('button');
@@ -565,11 +541,17 @@ document.addEventListener('DOMContentLoaded', function () {
           if (actor.isAlive()) actor.processEndOfTurnEffects();
         }
       } else {
-        const target = party.filter(function (member) { return member.isAlive(); })
-          [RPG.getRandomInt(Math.max(1, party.filter(function (member) {
-            return member.isAlive();
-          }).length))];
-        if (target) messages.push(...actor.takeTurn(target).messages);
+        const target = RPG.chooseEnemyTarget(party);
+        const defendingMembers = pendingActions.filter(function (action) {
+          return action && action.type === 'defend' && action.actor.isAlive()
+            && !action.actor.isIncapacitated();
+        }).map(function (action) { return action.actor; });
+        if (target) messages.push(...actor.takeTurn(target, party, defendingMembers).messages);
+      }
+      const reinforcements = enemies[0].takeReinforcements();
+      if (reinforcements.length) {
+        enemies.push(...reinforcements);
+        messages.push(`${enemies[0].name} calls ${reinforcements.length} reinforcements!`);
       }
     });
     pendingActions = [];
@@ -587,7 +569,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Display all messages generated during the turn.
     renderOutput(messages);
-    selectingPartyIndex = 0;
+    selectingPartyIndex = party.findIndex(function (member) { return member.isAlive(); });
     renderPartyTurnList();
   }
 
@@ -612,7 +594,10 @@ document.addEventListener('DOMContentLoaded', function () {
       const result = player.useItem(item, action.targets[0]);
       return result.message;
     }
-    return actor.useSkill(action.payload, action.targets);
+    const targets = action.payload.targetType === 'multiTarget'
+      && action.payload.targetGroup === 'enemy'
+      ? enemies.filter(function (enemy) { return enemy.isAlive(); }) : action.targets;
+    return actor.useSkill(action.payload, targets);
   }
 
 
@@ -670,11 +655,11 @@ document.addEventListener('DOMContentLoaded', function () {
       if (member.pendingLevelUps > 0) levelUpQueue.push(member);
     });
 
-    // Show the level-up screen if necessary, then return to preparation.
+    // Show the level-up screen if necessary, then open a chest.
     if (levelUpQueue.length) {
       showLevelUp(messages);
     } else {
-      showPreparation(messages);
+      showArtifactChest(messages);
     }
   }
 
@@ -707,6 +692,12 @@ document.addEventListener('DOMContentLoaded', function () {
       return !learned.includes(definition.name);
     }), 4);
 
+    if (available.length) {
+      const heading = document.createElement('h3');
+      heading.textContent = `${levelingMember.className}: choose a skill`;
+      elements.levelUp.appendChild(heading);
+    }
+
     available.forEach(function (definition) {
       const button = document.createElement('button');
       button.type = 'button';
@@ -734,7 +725,7 @@ document.addEventListener('DOMContentLoaded', function () {
             showLevelUp([`${levelingMember.name} learned ${definition.name}.`]);
           } else {
             elements.levelUp.hidden = true;
-            showPreparation([`${levelingMember.name} learned ${definition.name}.`]);
+            showArtifactChest([`${levelingMember.name} learned ${definition.name}.`]);
           }
         }
       });
@@ -750,8 +741,76 @@ document.addEventListener('DOMContentLoaded', function () {
         showLevelUp([`${levelingMember.name} has no new skills to learn.`]);
       } else {
         elements.levelUp.hidden = true;
-        showPreparation(['All available skills have been learned.']);
+        showArtifactChest(['All available skills have been learned.']);
       }
+    }
+  }
+
+  function showArtifactChest(messages) {
+    const available = gameData.artifacts.filter(function (artifact) {
+      return party.some(function (member) { return !member.hasArtifact(artifact.id); });
+    });
+    const choices = [];
+    while (choices.length < 3 && available.length) {
+      choices.push(available.splice(RPG.getRandomInt(available.length), 1)[0]);
+    }
+    elements.artifactChest.hidden = false;
+    renderOutput(messages.concat(['Open the chest and choose an artifact.']));
+    renderChestChoices();
+
+    function renderChestChoices() {
+      elements.artifactChest.replaceChildren();
+      const heading = document.createElement('h3');
+      heading.textContent = 'Choose an artifact';
+      elements.artifactChest.appendChild(heading);
+      if (!choices.length) {
+        const empty = document.createElement('p');
+        empty.textContent = 'Every party member already has every artifact.';
+        elements.artifactChest.appendChild(empty);
+        const continueButton = document.createElement('button');
+        continueButton.type = 'button';
+        continueButton.textContent = 'Continue to Preparation';
+        continueButton.addEventListener('click', function () {
+          elements.artifactChest.hidden = true;
+          showPreparation(['No artifacts remain available.']);
+        });
+        elements.artifactChest.appendChild(continueButton);
+        return;
+      }
+      choices.forEach(function (artifact) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = artifact.name;
+        const description = document.createElement('small');
+        description.textContent = artifact.description;
+        button.appendChild(description);
+        button.addEventListener('click', function () { renderArtifactRecipients(artifact); });
+        elements.artifactChest.appendChild(button);
+      });
+    }
+
+    function renderArtifactRecipients(artifact) {
+      elements.artifactChest.replaceChildren();
+      const heading = document.createElement('h3');
+      heading.textContent = `${artifact.name}: choose a party member`;
+      elements.artifactChest.appendChild(heading);
+      party.forEach(function (member) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.disabled = member.hasArtifact(artifact.id);
+        button.textContent = member.name + (button.disabled ? ' (already equipped)' : '');
+        button.addEventListener('click', function () {
+          member.equipArtifact(artifact.id);
+          elements.artifactChest.hidden = true;
+          showPreparation([`${member.name} equipped ${artifact.name}.`]);
+        });
+        elements.artifactChest.appendChild(button);
+      });
+      const back = document.createElement('button');
+      back.type = 'button';
+      back.textContent = 'Back to Artifacts';
+      back.addEventListener('click', renderChestChoices);
+      elements.artifactChest.appendChild(back);
     }
   }
 
@@ -775,7 +834,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const tabs = document.createElement('div');
     const content = document.createElement('div');
     const tabNames = [
-      ['gear', 'Upgrade Gear'],
       ['consumables', 'Consumables'],
       ['skills', 'Learn Skill'],
       ['recruit', 'Recruit'],
@@ -797,8 +855,8 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     elements.shop.appendChild(tabs);
     elements.shop.appendChild(content);
-    tabs.querySelector('[data-shop-tab="gear"]').classList.add('selected-shop-tab');
-    renderShopTab('gear', content);
+    tabs.querySelector('[data-shop-tab="consumables"]').classList.add('selected-shop-tab');
+    renderShopTab('consumables', content);
 
     // Add a button to leave the shop and enter preparation.
     const leave = document.createElement('button');
@@ -832,19 +890,9 @@ document.addEventListener('DOMContentLoaded', function () {
     return choices;
   }
 
-  function getUpgradeCost(type, member) {
-    const owner = member || player;
-    const upgrade = type === 'weapon'
-      ? gameData.shop.weaponUpgrade : gameData.shop.armorUpgrade;
-    const level = type === 'weapon' ? owner.weaponLevel : owner.armorLevel;
-    return upgrade.baseCost + level * upgrade.costIncrease;
-  }
-
   function renderShopTab(tabName, content) {
     content.replaceChildren();
-    if (tabName === 'gear') {
-      renderGearShop(content);
-    } else if (tabName === 'consumables') {
+    if (tabName === 'consumables') {
       renderConsumableShop(content);
     } else if (tabName === 'recruit') {
       renderRecruitShop(content);
@@ -863,46 +911,6 @@ document.addEventListener('DOMContentLoaded', function () {
     button.appendChild(detail);
     button.addEventListener('click', purchase);
     container.appendChild(button);
-  }
-
-  function renderGearShop(container) {
-    const weapon = gameData.shop.weaponUpgrade;
-    const armor = gameData.shop.armorUpgrade;
-    party.forEach(function (member) {
-      const heading = document.createElement('h3');
-      heading.textContent = member.name;
-      container.appendChild(heading);
-      const weaponCost = getUpgradeCost('weapon', member);
-      const armorCost = getUpgradeCost('armor', member);
-      addShopPurchaseButton(
-        container,
-        `Upgrade Weapon - ${weaponCost} gold`,
-        `Level ${member.weaponLevel} -> ${member.weaponLevel + 1}; `
-          + `Attack +${weapon.attackIncrease} (${member.attackPower} -> `
-          + `${member.attackPower + weapon.attackIncrease}).`,
-        player.gold < weaponCost,
-        function () {
-          if (player.gold < weaponCost) return;
-          player.gold -= weaponCost;
-          member.upgradeWeapon(weapon.attackIncrease);
-          showShop([`${member.name}'s weapon upgraded to level ${member.weaponLevel}.`]);
-        }
-      );
-      addShopPurchaseButton(
-        container,
-        `Upgrade Armor - ${armorCost} gold`,
-        `Level ${member.armorLevel} -> ${member.armorLevel + 1}; `
-          + `Defense +${armor.defenseIncrease} (${member.defense} -> `
-          + `${member.defense + armor.defenseIncrease}).`,
-        player.gold < armorCost,
-        function () {
-          if (player.gold < armorCost) return;
-          player.gold -= armorCost;
-          member.upgradeArmor(armor.defenseIncrease);
-          showShop([`${member.name}'s armor upgraded to level ${member.armorLevel}.`]);
-        }
-      );
-    });
   }
 
   function renderConsumableShop(container) {
@@ -1059,12 +1067,37 @@ document.addEventListener('DOMContentLoaded', function () {
       renderPreparationSkills();
       return;
     }
+    if (view === 'artifacts') {
+      renderPreparationArtifacts();
+      return;
+    }
 
     // Outside battle, display every party member's statistics.
     party.forEach(function (member) {
       const stats = document.createElement('p');
       stats.textContent = formatPlayerStats(member);
       elements.preparationPanel.appendChild(stats);
+    });
+  }
+
+  function renderPreparationArtifacts() {
+    party.forEach(function (member) {
+      const heading = document.createElement('h3');
+      heading.textContent = member.name;
+      elements.preparationPanel.appendChild(heading);
+      if (!member.artifacts.length) {
+        const empty = document.createElement('p');
+        empty.textContent = 'No artifacts equipped.';
+        elements.preparationPanel.appendChild(empty);
+      }
+      member.artifacts.forEach(function (id) {
+        const artifact = gameData.artifacts.find(function (definition) {
+          return definition.id === id;
+        });
+        const entry = document.createElement('p');
+        entry.textContent = `${artifact.name} - ${artifact.description}`;
+        elements.preparationPanel.appendChild(entry);
+      });
     });
   }
 
@@ -1100,10 +1133,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const subject = member || player;
     return `Level ${subject.level} ${subject.className} | HP ${subject.health}/${subject.maxHealth} `
       + `| MP ${subject.mp}/${subject.maxMp} | Attack ${subject.attackPower} `
-      + `| Weapon Lv ${subject.weaponLevel} | Defense ${subject.defense} `
-      + `| Armor Lv ${subject.armorLevel} | Total XP ${subject.totalXp} `
+      + `| Defense ${subject.defense} | Total XP ${subject.totalXp} `
       + `| XP to next level ${subject.xp}/${subject.xpNeeded()} `
       + `| Dexterity ${subject.getDexterity()} | Agility ${subject.getAgility()} `
+      + `| Hate ${subject.getHate()} `
       + `| Speed ${subject.getSpeed()} | Crit ${Math.round(
         (subject.critChance + subject.critChanceBonus) * 100
       )}% | Effects ${subject.getActiveEffectSummary() || 'None'}`;
@@ -1126,7 +1159,7 @@ document.addEventListener('DOMContentLoaded', function () {
     messages.push(
       '',
       `Defeat. You defeated ${defeatedEnemies} `
-        + `${defeatedEnemies === 1 ? 'enemy' : 'enemies'}.`,
+        + `${defeatedEnemies === 1 ? 'boss' : 'bosses'}.`,
       '',
       'Press Start Game to try again.'
     );
@@ -1136,6 +1169,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Hide all game screens except the start button.
     elements.combat.hidden = true;
     elements.levelUp.hidden = true;
+    elements.artifactChest.hidden = true;
     elements.shop.hidden = true;
     elements.preparation.hidden = true;
 
@@ -1218,7 +1252,7 @@ document.addEventListener('DOMContentLoaded', function () {
       combatant.title = [enemy.name, enemy.getActiveEffectSummary()].filter(Boolean).join(' - ');
       const icon = document.createElement('span');
       icon.className = 'battlefield-icon';
-      icon.textContent = 'x';
+      icon.textContent = enemy.icon || 'x';
       combatant.appendChild(icon);
       combatant.appendChild(createBattleBar(enemy.health, enemy.maxHealth, 'health-bar'));
       enemyRow.appendChild(combatant);

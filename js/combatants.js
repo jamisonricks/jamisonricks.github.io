@@ -27,7 +27,10 @@
       this.spellCostReduction = 0;
       this.speedPercent = 0;
       this.agilityPercent = 0;
+      this.agilityBonus = 0;
+      this.hateBonus = 0;
       this.dexterityPercent = 0;
+      this.dexterityBonus = 0;
     }
 
     isAlive() {
@@ -40,11 +43,9 @@
       return damage;
     }
 
-    getDamageResult(amount, damageType, applyDamage = true) {
-      if (applyDamage && this.preventNextHit) {
-        this.preventNextHit = false;
-        return { damage: 0, effectiveness: 'normal', prevented: true };
-      }
+    getDamageResult(amount, damageType, applyDamage = true, isAttack = false) {
+      const bulwark = applyDamage && isAttack && this.bulwarkReady;
+      if (bulwark) this.bulwarkReady = false;
       const isWeak = (this.weaknesses || []).includes(damageType);
       const isResisted = this.resistance === damageType;
       const isWaking = this.hasActiveEffect('sleep');
@@ -55,12 +56,17 @@
       if (isWaking && applyDamage) {
         this.removeActiveEffect('sleep');
       }
-      const reducedDamage = this.isDefending && amount > 0
-        ? Math.max(1, Math.floor(amount * multiplier * 0.8))
-        : Math.floor(amount * multiplier);
+      const defenseMultiplier = this.isDefending ? 0.8 : 1;
+      let reducedDamage = Math.floor(
+        amount * multiplier * defenseMultiplier * (bulwark ? 0.2 : 1)
+      );
+      if (this.isDefending && amount > 0 && !bulwark) {
+        reducedDamage = Math.max(1, reducedDamage);
+      }
       return {
         damage: applyDamage ? this.takeDamage(reducedDamage) : reducedDamage,
         effectiveness: isWaking ? 'sleep' : isWeak ? 'weak' : isResisted ? 'resisted' : 'normal',
+        bulwark,
       };
     }
 
@@ -75,9 +81,9 @@
     }
 
     attackWithResult(target, defenseBonus = 0, damageBonus = 0, damageType = 'normal',
-      guaranteed = false) {
+      guaranteed = false, damageMultiplier = 1) {
       const hitChance = guaranteed ? 1 : this.getHitChance(target);
-      if (Math.random() > hitChance) {
+      if (Math.random() >= hitChance) {
         return { damage: 0, effectiveness: 'normal', hit: false, critical: false };
       }
       const critical = guaranteed || Math.random() <= this.critChance + this.critChanceBonus;
@@ -88,15 +94,21 @@
       const attackMultiplier = critical ? 1.5 : 1;
       const chargedMultiplier = this.chargeMultiplier;
       const result = target.getDamageResult(
-        damage * attackMultiplier * chargedMultiplier * this.outgoingDamageMultiplier,
-        damageType
+        damage * attackMultiplier * chargedMultiplier * this.outgoingDamageMultiplier
+          * damageMultiplier,
+        damageType, true, true
       );
       if (result.hit !== false && result.damage > 0) this.removeConsumedEffects();
+      if (!result.prevented && target instanceof Enemy && target.isAlive()
+        && this.hasArtifact && this.hasArtifact('firestarter') && Math.random() < 0.2) {
+        target.applyStatusEffect('burn', `Firestarter: ${this.name}`, { duration: 1 });
+        result.firestarterBurn = true;
+      }
       return Object.assign(result, { hit: true, critical });
     }
 
     getHitChance(target) {
-      return Math.max(0.1, Math.min(0.95,
+      return Math.max(0, Math.min(1,
         0.75 + (this.getDexterity() - target.getAgility()) * 0.03));
     }
 
@@ -114,8 +126,8 @@
       if (definition.chance !== undefined && Math.random() > definition.chance) return false;
 
       const durationOffset = options.durationOffset || 0;
-      const remainingDuration = definition.duration === null
-        ? null : definition.duration + durationOffset;
+      const duration = options.duration === undefined ? definition.duration : options.duration;
+      const remainingDuration = duration === null ? null : duration + durationOffset;
       const existing = definition.stacking === 'stack' ? null
         : this.activeEffects.find(function (instance) {
           return instance.effectId === effectId && instance.sourceId === sourceId;
@@ -236,7 +248,10 @@
         critChanceBonus: 0,
         speedPercent: 0,
         agilityPercent: 0,
+        agilityBonus: 0,
+        hateBonus: 0,
         dexterityPercent: 0,
+        dexterityBonus: 0,
       };
       const appliedEffectIds = new Set();
       this.activeEffects.forEach(function (instance) {
@@ -258,8 +273,11 @@
     }
 
     getSpeed() { return Math.floor(this.speed * (1 + this.speedPercent)); }
-    getAgility() { return Math.floor(this.agility * (1 + this.agilityPercent)); }
-    getDexterity() { return Math.floor(this.dexterity * (1 + this.dexterityPercent)); }
+    getAgility() { return Math.floor(this.agility * (1 + this.agilityPercent)) + this.agilityBonus; }
+    getHate() { return 1 + this.hateBonus; }
+    getDexterity() {
+      return Math.floor(this.dexterity * (1 + this.dexterityPercent)) + this.dexterityBonus;
+    }
   }
 
   class Player extends Combatant {
@@ -278,11 +296,10 @@
       this.totalXp = 0;
       this.gold = 0;
       this.inventory = {};
-      this.weaponLevel = 0;
-      this.armorLevel = 0;
+      this.artifacts = [];
       this.passive = classData.passive;
       this.passiveType = classData.name;
-      this.preventNextHit = classData.name === 'Knight';
+      this.bulwarkReady = classData.name === 'Knight';
       this.guaranteedAttackReady = false;
       this.passiveTurns = classData.name === 'Archer' ? RPG.getRandomInt(3) + 2 : 0;
       this.classData = classData;
@@ -290,6 +307,23 @@
     }
 
     addSkill(skill) { this.skills.push(skill); }
+    hasArtifact(id) { return this.artifacts.includes(id); }
+    equipArtifact(id) {
+      const artifact = gameData.artifacts.find(function (definition) { return definition.id === id; });
+      if (!artifact) throw new Error(`Unknown artifact: ${id}`);
+      if (this.hasArtifact(id)) throw new Error(`${this.name} already has ${artifact.name}.`);
+      this.artifacts.push(id);
+      if (id === 'smoke-bomb') this.agility += 20;
+      if (id === 'ancient-tome') this.maxMp += 10;
+    }
+    getMultiTargetDamageMultiplier(enemyCount) {
+      return this.hasArtifact('mana-condenser')
+        ? 1 + Math.max(0, 5 - enemyCount) * 0.2 : 1;
+    }
+    applyRegenerationEffects() {
+      super.applyRegenerationEffects();
+      if (this.hasArtifact('band-of-life')) this.heal(this.maxHealth * 0.05);
+    }
     getSkillCost(skill) {
       if (skill.additionalEffects.some(function (effect) {
         return effect.type === 'maxHealthReduction';
@@ -308,14 +342,6 @@
     }
     addItem(itemId) {
       this.inventory[itemId] = (this.inventory[itemId] || 0) + 1;
-    }
-    upgradeWeapon(amount) {
-      this.attackPower += amount;
-      this.weaponLevel += 1;
-    }
-    upgradeArmor(amount) {
-      this.defense += amount;
-      this.armorLevel += 1;
     }
     hasItem(itemId) { return (this.inventory[itemId] || 0) > 0; }
     useItem(item, target = this) {
@@ -341,7 +367,8 @@
     getDefense() { return Math.floor(this.defense * (1 + this.defensePercent)); }
     resetCombatBuffs() {
       this.clearActiveEffects();
-      this.preventNextHit = this.passiveType === 'Knight';
+      this.isDefending = false;
+      this.bulwarkReady = this.passiveType === 'Knight';
       this.guaranteedAttackReady = false;
       this.passiveTurns = this.passiveType === 'Archer' ? RPG.getRandomInt(3) + 2 : 0;
     }
@@ -369,7 +396,7 @@
       this.weaknesses = weaknesses;
       this.resistance = resistance;
     }
-    takeTurn(target) {
+    takeTurn(target, party = [target], defendingMembers = []) {
       const messages = [];
       if (!this.isAlive()) return this.finishTurn(messages, false);
       if (this.hasActiveEffect('sleep')) {
@@ -380,13 +407,18 @@
         messages.push(`${this.name} is stunned and cannot act.`);
         return this.finishTurn(messages, false);
       }
-      if (Math.random() > this.attackChance) {
+      if (!this.hasPreparedAttack() && Math.random() >= Math.min(1, this.attackChance)) {
         messages.push(`${this.name} does not attack this turn.`);
         return this.finishTurn(messages, false);
       }
+      const attacked = this.performTurnAttack(target, party, defendingMembers, messages);
+      return this.finishTurn(messages, attacked);
+    }
+    hasPreparedAttack() { return false; }
+    performTurnAttack(target, party, defendingMembers, messages) {
       const result = this.attackWithResult(target, target.isDefending ? 2 : 0);
       messages.push(RPG.formatAttackResult(this, target, result));
-      return this.finishTurn(messages, true);
+      return true;
     }
     finishTurn(messages, attacked) {
       messages.push(...this.processTurnEffects());
@@ -395,6 +427,110 @@
     }
   }
 
+  function createScaledEnemy(definition, scaling, level, name) {
+    const stat = function (key) {
+      return Math.floor(definition[key] + scaling[key] * level);
+    };
+    const enemy = new Enemy(
+      name, stat('health'), stat('attack'), stat('defense'),
+      definition.attackChance + scaling.attackChance * level,
+      definition.weaknesses.slice(), definition.resistance,
+      stat('dexterity'), stat('agility'),
+      Math.min(scaling.maxCritChance, definition.critChance + scaling.critChance * level),
+      stat('speed')
+    );
+    enemy.icon = definition.icon;
+    return enemy;
+  }
+
+  class Boss extends Enemy {
+    constructor(definition, level) {
+      const scaled = createScaledEnemy(definition, gameData.bossScaling, level, definition.name);
+      super(scaled.name, scaled.maxHealth, scaled.attackPower, scaled.defense,
+        scaled.attackChance, scaled.weaknesses, scaled.resistance,
+        scaled.dexterity, scaled.agility, scaled.critChance, scaled.speed);
+      this.icon = definition.icon;
+      this.id = definition.id;
+      this.reinforcement = definition.reinforcement;
+      this.encounterLevel = level;
+      this.reinforcementsCalled = false;
+      this.reinforcementsPending = false;
+    }
+
+    takeDamage(amount) {
+      const previousHealth = this.health;
+      const damage = super.takeDamage(amount);
+      if (this.reinforcement && !this.reinforcementsCalled && previousHealth > this.maxHealth / 2
+        && this.health <= this.maxHealth / 2) {
+        this.reinforcementsCalled = true;
+        this.reinforcementsPending = true;
+      }
+      return damage;
+    }
+
+    takeReinforcements() {
+      if (!this.reinforcementsPending) return [];
+      this.reinforcementsPending = false;
+      return Array.from({ length: this.reinforcement.count }, function (_, index) {
+        return createScaledEnemy(this.reinforcement, gameData.reinforcementScaling,
+          this.encounterLevel, `${this.reinforcement.name} ${index + 1}`);
+      }, this);
+    }
+  }
+
+  class Executioner extends Boss {
+    constructor(definition, level) {
+      super(definition, level);
+      this.executionTarget = null;
+    }
+    hasPreparedAttack() { return this.executionTarget !== null; }
+    getExecutionWarning() {
+      return this.executionTarget
+        ? `${this.name} prepares to execute ${this.executionTarget.className}! Defend next turn!`
+        : '';
+    }
+    performTurnAttack(target, party, defendingMembers, messages) {
+      if (this.executionTarget) {
+        const victim = this.executionTarget;
+        this.executionTarget = null;
+        if (!victim.isAlive()) {
+          messages.push(`${this.name}'s execution fails: ${victim.name} is already defeated.`);
+          return false;
+        }
+        const defended = victim.isDefending || defendingMembers.includes(victim);
+        const damage = defended ? Math.floor(victim.health * 0.8) : victim.health;
+        victim.takeDamage(damage);
+        messages.push(`${this.name} executes ${victim.name} for ${damage} damage`
+          + (defended ? ' (defended).' : '.'));
+        return true;
+      }
+      const attack = RPG.getRandomInt(3);
+      if (attack === 2) {
+        this.executionTarget = target;
+        messages.push(this.getExecutionWarning());
+        return false;
+      }
+      if (attack === 1) {
+        messages.push(`${this.name} attacks the entire party!`);
+        party.filter(function (member) { return member.isAlive(); }).forEach(function (member) {
+          const result = this.attackWithResult(member, member.isDefending ? 2 : 0);
+          messages.push(RPG.formatAttackResult(this, member, result));
+        }, this);
+        return true;
+      }
+      return super.performTurnAttack(target, party, defendingMembers, messages);
+    }
+  }
+
+  RPG.createBoss = function (encounterLevel, previousBossId = null) {
+    const choices = encounterLevel === 0
+      ? gameData.bosses.filter(function (definition) { return definition.id === 'precursor'; })
+      : gameData.bosses.filter(function (definition) { return definition.id !== previousBossId; });
+    if (!choices.length) throw new Error('No eligible boss available for this encounter.');
+    const definition = choices.length === 1 ? choices[0] : choices[RPG.getRandomInt(choices.length)];
+    return definition.id === 'executioner'
+      ? new Executioner(definition, encounterLevel) : new Boss(definition, encounterLevel);
+  };
   RPG.Combatant = Combatant;
   RPG.Player = Player;
   RPG.Enemy = Enemy;

@@ -129,6 +129,7 @@ body {
 #combat-item-list,
 #combat-stats,
 #shop,
+#artifact-chest,
 #preparation {
   margin: 8px auto;
   max-width: 440px;
@@ -136,12 +137,14 @@ body {
 #combat-item-list button,
 #combat-stats button,
 #shop button,
+#artifact-chest button,
 #preparation-panel button {
   display: block;
   margin: 8px auto;
   width: 100%;
 }
 #combat-item-list small,
+#artifact-chest small,
 #shop small {
   display: block;
   margin-top: 4px;

@@ -34,7 +34,8 @@
     if (!result.hit) return `${actor.name} used ${sourceName} on ${target.name}. `
       + `${target.name} dodged the attack.`;
     return `${actor.name} used ${sourceName} on ${target.name}. `
-      + `${target.name} took ${result.damage} damage.`;
+      + `${target.name} took ${result.damage} damage.`
+      + (result.firestarterBurn ? ` ${target.name} is afflicted with Burn (1 turn).` : '');
   }
 
   function formatSkillAttack(player, skillName, target, result) {
@@ -49,7 +50,9 @@
     const criticalText = result.critical ? ' Critical hit!' : '';
     return `${player.name} used ${skillName} on ${target.name}. `
       + `${target.name} took ${result.damage} damage`
-      + RPG.formatEffectiveness(result.effectiveness) + `.${criticalText}`;
+      + RPG.formatEffectiveness(result.effectiveness) + `.${criticalText}`
+      + (result.bulwark ? ' Bulwark reduced the damage by 80%.' : '')
+      + (result.firestarterBurn ? ` ${target.name} is afflicted with Burn (1 turn).` : '');
   }
 
   const additionalEffectTypes = [
@@ -99,13 +102,17 @@
       this.targetGroup = definition.targetGroup;
     }
 
-    getDescription(player, target) {
+    getDescription(player, target, enemyCount = 1) {
       const effect = this.effect;
       if (!['damage', 'damageOverTime', 'lifeSteal', 'execute']
         .includes(effect.type) || effect.powerPerMp !== undefined) return this.description;
       const baseDamage = Math.max(0, player.getAttackPower() + (effect.powerBonus || 0)
         + (effect.useDamageBuff === false ? 0 : player.damageBuff) - target.getDefense());
-      const result = target.getDamageResult(baseDamage, effect.damageType || 'normal', false);
+      const multiplier = this.targetType === 'multiTarget' && this.targetGroup === 'enemy'
+        ? player.getMultiTargetDamageMultiplier(enemyCount) : 1;
+      const result = target.getDamageResult(
+        baseDamage * multiplier, effect.damageType || 'normal', false
+      );
       const damageOverTimeEffect = this.additionalEffects
         .map(function (additionalEffect) {
           return additionalEffect.type === 'applyStatusEffect'
@@ -121,9 +128,13 @@
       return `${this.description} Damage: ${result.damage}${damageOverTime}.`;
     }
 
-    use(player, target) {
+    use(player, target, damageMultiplier = 1) {
       const isMultiTarget = this.targetType === 'multiTarget';
       if (Array.isArray(target) && isMultiTarget) {
+        if (this.targetGroup === 'enemy') {
+          target = target.filter(function (recipient) { return recipient.isAlive(); });
+          damageMultiplier = player.getMultiTargetDamageMultiplier(target.length);
+        }
         if (this.effect.type === 'applyStatusEffect'
           && this.effect.effectId === 'criticalChanceIncrease'
           && !this.additionalEffects.length) {
@@ -139,13 +150,13 @@
         const groupName = this.targetGroup === 'ally' ? 'all allies' : 'all enemies';
         const header = `${player.name} used ${this.name} on ${groupName}.`;
         const details = target.map(function (singleTarget) {
-          return this.use(player, singleTarget)
+          return this.use(player, singleTarget, damageMultiplier)
             .replace(`${player.name} used ${this.name} on ${singleTarget.name}. `, '');
         }, this);
         return `${header} ${details.join(' ')}`;
       }
       if (Array.isArray(target)) target = target[0];
-      const context = {};
+      const context = { damageMultiplier };
       const messages = [this.applyPrimaryEffect(player, target, context)];
       this.additionalEffects.forEach(function (effect) {
         const message = this.applyAdditionalEffect(player, target, effect, context);
@@ -172,6 +183,9 @@
       if (definition.category === 'damageOverTime') {
         return `${usage}${recipient.name} is afflicted with ${definition.name}.`;
       }
+      if (effect.effectId === 'tremor') {
+        return `${usage}${recipient.name} is afflicted with Tremor.`;
+      }
       return `${usage}${definition.description}`;
     }
 
@@ -193,7 +207,8 @@
             + (effect.useDamageBuff === false ? 0 : damageBonus)
             + effectDamageBonus,
           effect.damageType || 'normal',
-          guaranteed
+          guaranteed,
+          context.damageMultiplier
         );
         context.result = result;
         if (effect.consumeMp) context.spentMp = spentMp;
@@ -253,10 +268,13 @@
     }
 
     applyAdditionalEffect(player, target, effect, context) {
-      if (effect.requiresHit && (!context.result || !context.result.hit)) return '';
+      if (effect.requiresHit && (!context.result || !context.result.hit
+        || context.result.prevented)) return '';
       if (effect.requiresSpentMpAbove !== undefined
         && (context.spentMp === undefined
           || context.spentMp <= effect.requiresSpentMpAbove)) return '';
+      if (effect.chance !== undefined && effect.type === 'applyStatusEffect'
+        && Math.random() >= effect.chance) return '';
 
       if (effect.type === 'damage') {
         const damageBonus = effect.useDamageBuff === false ? 0 : player.damageBuff;
@@ -266,7 +284,8 @@
           0,
           (effect.powerBonus || 0) + damageBonus,
           effect.damageType || 'normal',
-          effect.useGuaranteedAttack === false ? false : player.consumeGuaranteedAttack()
+          effect.useGuaranteedAttack === false ? false : player.consumeGuaranteedAttack(),
+          context.damageMultiplier
         );
         context.result = result;
         if (effect.clearDamageBuff !== false) player.damageBuff = 0;

@@ -71,7 +71,9 @@ test('damage skills log their use once and describe DOT application', function (
   Math.random = function () { return 0.99; };
   let missMessage;
   try {
-    missMessage = stormArrow.use(archer, createEnemy());
+    const evasiveEnemy = createEnemy();
+    evasiveEnemy.agility = 10;
+    missMessage = stormArrow.use(archer, evasiveEnemy);
   } finally {
     Math.random = oldRandom;
   }
@@ -154,6 +156,37 @@ test('status modifiers affect combat and expire by duration', function () {
   assert.equal(timedEffect.outgoingDamageMultiplier, 1);
 });
 
+test('Blind lowers effective dexterity by 10 until it expires', function () {
+  const combatants = [
+    new RPG.Player(gameData.classes[0]),
+    createEnemy(),
+  ];
+  const target = new RPG.Combatant('Target', 100, 1, 0, 0, 5);
+  combatants.forEach(function (combatant) {
+    combatant.dexterity = 12;
+    combatant.applyStatusEffect('dexterityIncrease', 'boost');
+    assert.equal(combatant.getDexterity(), 15);
+    const originalChance = combatant.getHitChance(target);
+    combatant.applyStatusEffect('blind', 'first source');
+    combatant.applyStatusEffect('blind', 'second source');
+    assert.equal(combatant.getDexterity(), 5);
+    assert.ok(Math.abs(combatant.getHitChance(target) - (originalChance - 0.25)) < 1e-10);
+    assert.match(combatant.getActiveEffectSummary(), /Blind \(3 turns\)/);
+    combatant.tickActiveEffects();
+    combatant.tickActiveEffects();
+    assert.equal(combatant.getDexterity(), 5);
+    combatant.tickActiveEffects();
+    assert.equal(combatant.getDexterity(), 12);
+    assert.equal(combatant.hasActiveEffect('blind'), false);
+
+    combatant.dexterity = 6;
+    combatant.applyStatusEffect('blind', 'first source');
+    assert.equal(combatant.getDexterity(), -4);
+    combatant.clearActiveEffects();
+    assert.equal(combatant.getDexterity(), 6);
+  });
+});
+
 test('sleep wakes when damaged and stun consumes one enemy turn', function () {
   const oldRandom = Math.random;
   const caster = new RPG.Player(gameData.classes.find(function (gameClass) {
@@ -201,14 +234,25 @@ test('Channel Aether applies and expires its regeneration and cost effects', fun
   const channelAether = new RPG.Skill(gameData.levelUpSkills.find(function (skill) {
     return skill.name === 'Channel Aether';
   }));
+  const heal = new RPG.Skill(gameData.classes[0].skills.find(function (skill) {
+    return skill.name === 'Heal';
+  }));
+  assert.equal(player.getSkillCost(heal), 3);
   channelAether.use(player, player);
 
-  assert.equal(player.spellCostReduction, 3);
+  assert.equal(player.spellCostReduction, 1);
+  assert.equal(player.getSkillCost(heal), 2);
+  assert.equal(player.getSkillCost({ mpCost: 0, additionalEffects: [] }), 0);
+  player.mp = 8;
+  player.useSkill(heal, player);
+  assert.equal(player.mp, 6);
+  player.health = 10;
   assert.equal(player.healthRegenerationPercent, 0.05);
   for (let turn = 0; turn < 3; turn += 1) player.processEndOfTurnEffects();
   assert.equal(player.health, 10 + player.maxHealth * 0.05 * 3);
-  assert.equal(player.spellCostReduction, 3);
+  assert.equal(player.spellCostReduction, 1);
   player.processEndOfTurnEffects();
   assert.equal(player.spellCostReduction, 0);
+  assert.equal(player.getSkillCost(heal), 3);
   assert.equal(player.healthRegenerationPercent, 0);
 });
